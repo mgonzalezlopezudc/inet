@@ -120,6 +120,14 @@ optional sequence suppression, the supported IE values and enhanced ACKs;
 unsupported feature IEs are not enabled by this option. Enhanced ACK contents
 are optional receiver configuration, not security or feature negotiation.
 An omitted PAN is resolved only from an existing local association context.
+The same opt-in profile supports a one-shot enhanced beacon and enhanced
+active discovery. In the managed example, ``inet -u Cmdenv -c
+EnhancedDiscovery -r 0,1`` runs both radio representations. The request
+carries the scanner's extended address; the response carries configured IEs
+and the existing beacon payload. Unsupported requested IE producers do not
+cause an empty substitute response. A descriptor keeps absent wire fields
+distinct from an inferred coordinator PAN. Enhanced discovery does not
+install a periodic superframe or infer a PAN-coordinator role.
 
 The native profile also supports periodic beacons, tracking and slotted CAP
 access. An associated device tracking its PAN coordinator may request a GTS;
@@ -135,7 +143,7 @@ profile requires a fixed rate within ±40 ppm, an initial offset aligned to the
 scheduling grid, and a
 scheduling quantum that divides the 16 µs symbol. The supported
 ``OscillatorBasedClock`` configuration uses ``clockGranularity = 0`` and an
-unchanged oscillator. Enhanced management frames,
+unchanged oscillator. Other enhanced management procedures,
 cryptographic security, TSCH, DSME, ranging and modern UWB are separate future
 profiles. The retained :ned:`Ieee802154Mac` and :ned:`Ieee802154NarrowbandMac`
 continue to serve explicit legacy configurations.

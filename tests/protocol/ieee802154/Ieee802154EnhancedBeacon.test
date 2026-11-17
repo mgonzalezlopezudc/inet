@@ -1,0 +1,473 @@
+%description:
+Native one-shot enhanced beacon and actual notification through two peers.
+
+%extraargs: -r 0..109
+
+%includes:
+#include "ProtocolTest.h"
+#include "inet/common/packet/chunk/BytesChunk.h"
+#include "inet/common/lifecycle/LifecycleController.h"
+#include "inet/common/lifecycle/ModuleOperations.h"
+#include "inet/linklayer/ieee802154/Ieee802154FrameCodec.h"
+#include "inet/linklayer/ieee802154/Ieee802154InformationElements.h"
+using namespace inet;
+using namespace inet::protocoltest;
+
+%global:
+Define_ProtocolTestProgram()
+{
+    ProtocolTest test("ieee802154_enhanced_beacon");
+    if (getSimulation()->getSystemModule()->par("scenario").intValue() == 14 || getSimulation()->getSystemModule()->par("scenario").intValue() == 21)
+        test.intercept(tap("radioMedium").from("host[1]").to("host[0]").filterPacket("Ieee802154Frame.frameType == 3").nth(0).mutate([](Packet *packet) {
+            auto bytes = packet->peekDataAsBytes()->getBytes(); auto frame = Ieee802154FrameCodec::decode(bytes);
+            auto view = std::get<Ieee802154InformationElements::View>(Ieee802154InformationElements::inspect(*frame));
+            auto offset = view.payloadIes.offset - view.fixedMhr.length + 4;
+            ASSERT(frame->getPayload(offset) == 0x0c && frame->getPayload(offset + 1) == 100 && frame->getPayload(offset + 2) == 0);
+            frame->setPayload(offset,0xec); frame->setPayload(offset + 2,0x80); frame->setComputeFcs(true);
+            auto altered = Ieee802154FrameCodec::encode(*frame); ASSERT(altered.size() == bytes.size());
+            packet->eraseAll(); packet->insertAtBack(makeShared<BytesChunk>(altered));
+        }));
+    if (getSimulation()->getSystemModule()->par("scenario").intValue() == 16)
+        test.intercept(tap("radioMedium").from("host[0]").to("host[1]").filterPacket("Ieee802154Frame.frameType == 0").nth(0).mutate([](Packet *packet) {
+            auto bytes = packet->peekDataAsBytes()->getBytes(); auto frame = Ieee802154FrameCodec::decode(bytes);
+            ASSERT(Ieee802154FrameCodec::sourcePanField(*frame) == uint16_t(0x1234));
+            frame->setSourcePanId(0x2345); frame->setComputeFcs(true);
+            auto altered = Ieee802154FrameCodec::encode(*frame); ASSERT(altered.size() == bytes.size());
+            packet->eraseAll(); packet->insertAtBack(makeShared<BytesChunk>(altered));
+        }));
+    if (getSimulation()->getSystemModule()->par("scenario").intValue() == 27)
+        test.intercept(tap("radioMedium").from("host[0]").to("host[1]").filterPacket("Ieee802154Frame.frameType == 0").nth(0).mutate([](Packet *packet) {
+            auto bytes = packet->peekDataAsBytes()->getBytes(); auto frame = Ieee802154FrameCodec::decode(bytes);
+            auto view = std::get<Ieee802154InformationElements::View>(Ieee802154InformationElements::inspect(*frame));
+            ASSERT(view.headers.size() == 1 && view.headers[0].content == std::vector<uint8_t>({1,2,3,4,5,6}));
+            auto headers = view.headers; headers[0].content.resize(3);
+            auto body = Ieee802154InformationElements::encode(headers,view.payloads,{0x5a});
+            frame->setPayloadArraySize(body.size()); for (size_t i = 0; i < body.size(); ++i) frame->setPayload(i,body[i]);
+            frame->setComputeFcs(true); auto altered = Ieee802154FrameCodec::encode(*frame); ASSERT(altered.size() == bytes.size());
+            packet->eraseAll(); packet->insertAtBack(makeShared<BytesChunk>(altered));
+        }));
+    if (getSimulation()->getSystemModule()->par("scenario").intValue() >= 34 && getSimulation()->getSystemModule()->par("scenario").intValue() <= 36)
+        test.intercept(tap("radioMedium").from("host[1]").to("host[0]").filterPacket("Ieee802154Frame.frameType == 3").nth(0).mutate([](Packet *packet) {
+            auto scenario = getSimulation()->getSystemModule()->par("scenario").intValue();
+            auto bytes = packet->peekDataAsBytes()->getBytes(); auto frame = Ieee802154FrameCodec::decode(bytes);
+            auto view = std::get<Ieee802154InformationElements::View>(Ieee802154InformationElements::inspect(*frame));
+            if (scenario == 34) bytes.back() ^= 1;
+            else {
+                if (scenario == 35) bytes[view.headerIes.offset] |= 0x7f; // Header IE exceeds its enclosing frame.
+                else { bytes[0] |= 0x08; bytes[1] &= ~0x02; bytes[view.fixedMhr.length] = 0; }
+                std::vector<uint8_t> body(bytes.begin(),bytes.end() - 2); auto fcs = Ieee802154FrameCodec::calculateFcs(body);
+                bytes[bytes.size() - 2] = fcs & 0xff; bytes.back() = fcs >> 8;
+            }
+            packet->eraseAll(); packet->insertAtBack(makeShared<BytesChunk>(bytes));
+        }));
+    if (getSimulation()->getSystemModule()->par("scenario").intValue() == 37)
+        test.intercept(tap("radioMedium").from("host[1]").to("host[0]").filterPacket("Ieee802154Frame.frameType == 3").nth(0).mutate([](Packet *packet) {
+            auto original = packet->peekDataAsBytes()->getBytes(); auto frame = Ieee802154FrameCodec::decode(original);
+            auto view = std::get<Ieee802154InformationElements::View>(Ieee802154InformationElements::inspect(*frame));
+            ASSERT(view.headers.size() == 1 && view.headers[0].content.size() == 6);
+            auto headers = view.headers; headers[0].content.resize(12,0x44);
+            auto body = Ieee802154InformationElements::encode(headers,view.payloads,{7});
+            frame->setSourceAddress(Ieee802154Address::fromShort(2));
+            frame->setPayloadArraySize(body.size()); for (size_t i = 0; i < body.size(); ++i) frame->setPayload(i,body[i]);
+            frame->setComputeFcs(true); auto altered = Ieee802154FrameCodec::encode(*frame); ASSERT(altered.size() == original.size());
+            packet->eraseAll(); packet->insertAtBack(makeShared<BytesChunk>(altered));
+        }));
+    if (getSimulation()->getSystemModule()->par("scenario").intValue() == 46)
+        test.intercept(tap("radioMedium").from("host[1]").to("host[0]").filterPacket("Ieee802154Frame.frameType == 3").nth(0).mutate([](Packet *packet) {
+            auto original = packet->peekDataAsBytes()->getBytes(); auto frame = Ieee802154FrameCodec::decode(original);
+            auto view = std::get<Ieee802154InformationElements::View>(Ieee802154InformationElements::inspect(*frame));
+            ASSERT(view.headers.size() == 1 && view.headers[0].content.size() == 6);
+            auto headers = view.headers; headers[0].content.resize(14,0x44);
+            auto body = Ieee802154InformationElements::encode(headers,view.payloads,{7});
+            frame->setSourceAddress(Ieee802154Address()); frame->setPanCompression(false);
+            frame->setPayloadArraySize(body.size()); for (size_t i = 0; i < body.size(); ++i) frame->setPayload(i,body[i]);
+            frame->setComputeFcs(true); auto altered = Ieee802154FrameCodec::encode(*frame); ASSERT(altered.size() == original.size());
+            packet->eraseAll(); packet->insertAtBack(makeShared<BytesChunk>(altered));
+        }));
+    if (getSimulation()->getSystemModule()->par("scenario").intValue() == 49 || getSimulation()->getSystemModule()->par("scenario").intValue() == 50)
+        test.intercept(tap("radioMedium").from("host[1]").to("host[0]").filterPacket("Ieee802154Frame.frameType == 2").nth(0).drop());
+    if (getSimulation()->getSystemModule()->par("scenario").intValue() == 52 || getSimulation()->getSystemModule()->par("scenario").intValue() == 53)
+        test.intercept(tap("radioMedium").from("host[1]").to("host[0]").filterPacket("Ieee802154Frame.frameType == 3").nth(0).mutate([](Packet *packet) {
+            auto original = packet->peekDataAsBytes()->getBytes(); auto frame = Ieee802154FrameCodec::decode(original);
+            ASSERT(frame->getFrameVersion() == 2 && !frame->getFramePending() && frame->getFcsValid());
+            frame->setFramePending(true); frame->setComputeFcs(true); auto altered = Ieee802154FrameCodec::encode(*frame);
+            ASSERT(altered.size() == original.size()); packet->eraseAll(); packet->insertAtBack(makeShared<BytesChunk>(altered));
+        }));
+    return test.once(on("exercise").signal("verificationComplete").filterValue(1).within(0.2));
+}
+
+%activity:
+EV << "Enhanced beacon fixture compiled\n";
+
+%file: EnhancedBeaconExercise.cc
+#include "inet/common/ModuleRefByPar.h"
+#include "inet/common/Simsignals.h"
+#include "inet/common/lifecycle/LifecycleController.h"
+#include "inet/common/lifecycle/ModuleOperations.h"
+#include "inet/common/packet/Packet.h"
+#include "inet/common/packet/chunk/BytesChunk.h"
+#include "inet/linklayer/ieee802154/Ieee802154FrameCodec.h"
+#include "inet/linklayer/ieee802154/contract/IIeee802154MacServiceProvider.h"
+#include "inet/linklayer/ieee802154/contract/IIeee802154MacServiceClient.h"
+#include "inet/linklayer/ieee802154/contract/IIeee802154ManagementServiceProvider.h"
+#include "inet/linklayer/ieee802154/contract/IIeee802154ManagementServiceClient.h"
+namespace inet {
+class EnhancedBeaconExercise : public cSimpleModule, public cListener, public LifecycleController, public IIeee802154MacServiceClient, public IIeee802154ManagementServiceClient
+{
+    ModuleRefByPar<IIeee802154MacServiceProvider> root, child;
+    ModuleRefByPar<IIeee802154ManagementServiceProvider> management, childManagement;
+    bool suppressed = false; int scenario = 0, confirms = 0, notices = 0, received = 0, gets = 0, scans = 0, requests = 0, requestRx = 0;
+    uint64_t rngBefore = 0; int dataConfirms = 0, resets = 0, counterGets = 0, rejectedBeacons = 0, rootScans = 0, interrupted = 0;
+  protected:
+    void initialize() override {
+        root.reference(this,"serviceModule",true); child.reference(this,"childModule",true); management.reference(this,"serviceModule",true); childManagement.reference(this,"childModule",true); scenario = par("scenario"); suppressed = scenario == 1;
+        if (scenario != 40 && scenario != 41) getModuleByPath("^.host[1].nic.mac")->subscribe(packetReceivedFromLowerSignal,this);
+        if (scenario == 14 || scenario == 21 || scenario == 29 || scenario == 30 || (scenario >= 34 && scenario <= 37) || scenario == 45 || scenario == 46 || scenario == 49 || scenario == 50 || scenario >= 51) getModuleByPath("^.host[0].nic.mac")->subscribe(packetReceivedFromLowerSignal,this);
+        if (scenario == 47 || scenario == 48) getModuleByPath("^.host[0].nic.mac")->subscribe(packetSentToLowerSignal,this);
+    }
+    void activity() override {
+        wait(SimTime(1,SIMTIME_MS));
+        ASSERT(root->submitSet(1,{"macMinBe",uint64_t(0)}) == Ieee802154MacServiceAdmission::ACCEPTED);
+        if (scenario == 22 || scenario == 23) {
+            ASSERT(getModuleByPath("^.host[0].nic")->par("enableEnhancedFrames").boolValue() == (scenario == 22));
+            ASSERT(getModuleByPath("^.host[0].nic.mac")->par("enableEnhancedFrames").boolValue() == (scenario == 22));
+            auto rng = getModuleByPath("^.host[0].nic.mac")->getRNG(1);
+            auto initial = rng->getNumbersDrawn();
+            if (initial != (scenario == 22 ? 3 : 2))
+                throw cRuntimeError("initial RNG draws scenario=%d actual=%lu expected=%d",scenario,(unsigned long)initial,scenario == 22 ? 3 : 2);
+            ASSERT(root->submitReset(50,{false}) == Ieee802154MacServiceAdmission::ACCEPTED);
+            for (int i = 0; i < 40 && resets < 1; ++i) wait(SimTime(1,SIMTIME_MS));
+            ASSERT(resets == 1 && rng->getNumbersDrawn() == initial);
+            ASSERT(root->submitReset(51,{true}) == Ieee802154MacServiceAdmission::ACCEPTED);
+            for (int i = 0; i < 40 && resets < 2; ++i) wait(SimTime(1,SIMTIME_MS));
+            ASSERT(resets == 2 && rng->getNumbersDrawn() == initial + (scenario == 22 ? 3 : 2));
+            ASSERT(root->submitGet(52,{"macEbsn"}) == Ieee802154MacServiceAdmission::ACCEPTED);
+            ASSERT(counterGets == 1); emit(registerSignal("verificationComplete"),1L); return;
+        }
+        if (scenario == 24 || scenario == 25) {
+            physicallayer::Ieee802154PhyChannel channel{physicallayer::Ieee802154PhyChannel::Phy::O_QPSK,physicallayer::Ieee802154PhyChannel::Band::MHZ_2450,20};
+            Ieee802154MacBeaconRequest beacon{channel}; beacon.enhanced = true;
+            if (scenario == 24) beacon.headerIes = {{0,std::vector<uint8_t>(120,1)}};
+            else beacon.security.securityLevel = 1;
+            ASSERT(management->submitBeacon(53,beacon) == Ieee802154MacServiceAdmission::ACCEPTED);
+            for (int i = 0; i < 40 && !rejectedBeacons; ++i) wait(SimTime(1,SIMTIME_MS));
+            ASSERT(rejectedBeacons == 1 && received == 0 && notices == 0);
+            emit(registerSignal("verificationComplete"),1L); return;
+        }
+        if (scenario == 40 || scenario == 41) {
+            ASSERT(child->submitSet(1,{"macMinBe",uint64_t(0)}) == Ieee802154MacServiceAdmission::ACCEPTED);
+            physicallayer::Ieee802154PhyChannel channel{physicallayer::Ieee802154PhyChannel::Phy::O_QPSK,physicallayer::Ieee802154PhyChannel::Band::MHZ_2450,20};
+            Ieee802154MacScanRequest scan; scan.type = Ieee802154ScanType::ENHANCED_ACTIVE_SCAN; scan.channels = {channel}; scan.duration = 3000;
+            ASSERT(childManagement->submitScan(2,scan) == Ieee802154MacServiceAdmission::ACCEPTED);
+            wait(SimTime(1,SIMTIME_MS));
+            if (scenario == 40) ASSERT(child->cancel(2) == Ieee802154MacServiceCancelResult::CANCELLED);
+            else ASSERT(child->submitReset(3,{false}) == Ieee802154MacServiceAdmission::ACCEPTED);
+            for (int i = 0; i < 40 && (!scans || (scenario == 41 && !resets)); ++i) wait(SimTime(1,SIMTIME_MS));
+            ASSERT(scans == 1 && resets == (scenario == 41 ? 1 : 0));
+            wait(SimTime(50,SIMTIME_MS)); ASSERT(scans == 1 && resets == (scenario == 41 ? 1 : 0));
+            emit(registerSignal("verificationComplete"),1L); return;
+        }
+        if (scenario == 49 || scenario == 50) {
+            ASSERT(root->submitSet(2,{"macEbHeaderIeList",std::vector<Ieee802154InformationElements::Header>{{0,{1,2,3}}}}) == Ieee802154MacServiceAdmission::ACCEPTED);
+            if (scenario == 50) ASSERT(root->submitSet(3,{"macEbsn",uint64_t(255)}) == Ieee802154MacServiceAdmission::ACCEPTED);
+            ASSERT(child->submitSet(1,{"macMinBe",uint64_t(0)}) == Ieee802154MacServiceAdmission::ACCEPTED);
+            auto packet = new Packet("outstanding-data"); packet->insertAtBack(makeShared<BytesChunk>(std::vector<uint8_t>{0x5a}));
+            Ieee802154MacDataRequest data; data.legacyTx = false; data.ackTx = true; data.sourceAddressMode = Ieee802154Address::AddressType::EXTENDED;
+            data.destinationAddress = Ieee802154Address::fromExtended(0x0401123456789abcULL); data.destinationPanId = 0x1234;
+            ASSERT(root->submitData(scenario == 50 ? 4 : 3,packet,data) == Ieee802154MacServiceAdmission::ACCEPTED);
+            for (int i = 0; i < 100 && !requestRx; ++i) wait(SimTime(100,SIMTIME_US));
+            ASSERT(requestRx == 1 && dataConfirms == 0 && received == 0);
+            auto stop = new ModuleStopOperation; LifecycleOperation::StringMap parameters;
+            stop->initialize(getModuleByPath(scenario == 49 ? "^.host[0].nic.mac" : "^.host[0].nic.phy"),parameters); ASSERT(initiateOperation(stop));
+            wait(SimTime(1,SIMTIME_MS)); auto restart = new ModuleStartOperation; LifecycleOperation::StringMap startParameters;
+            restart->initialize(getModuleByPath(scenario == 49 ? "^.host[0].nic.mac" : "^.host[0].nic.phy"),startParameters); ASSERT(initiateOperation(restart));
+            for (int i = 0; i < 90 && !scans; ++i) wait(SimTime(1,SIMTIME_MS));
+            ASSERT(scans == 1 && dataConfirms == 1 && received == 0); wait(SimTime(5,SIMTIME_MS));
+            ASSERT(scans == 1 && dataConfirms == 1 && received == 0);
+            if (scenario == 50) {
+                ASSERT(root->submitGet(5,{"macEbsn"}) == Ieee802154MacServiceAdmission::ACCEPTED); ASSERT(counterGets == 1);
+                physicallayer::Ieee802154PhyChannel channel{physicallayer::Ieee802154PhyChannel::Phy::O_QPSK,physicallayer::Ieee802154PhyChannel::Band::MHZ_2450,20};
+                Ieee802154MacScanRequest fresh; fresh.type = Ieee802154ScanType::ENHANCED_ACTIVE_SCAN; fresh.channels = {channel}; fresh.duration = 3000;
+                ASSERT(childManagement->submitScan(3,fresh) == Ieee802154MacServiceAdmission::ACCEPTED);
+                for (int i = 0; i < 90 && scans < 2; ++i) wait(SimTime(1,SIMTIME_MS));
+                ASSERT(scans == 2 && received == 1 && requestRx == 2);
+                ASSERT(root->submitGet(6,{"macEbsn"}) == Ieee802154MacServiceAdmission::ACCEPTED); ASSERT(counterGets == 2);
+            }
+            emit(registerSignal("verificationComplete"),1L); return;
+        }
+        if (scenario == 20) {
+            ASSERT(root->submitSet(20,{"macBsn",uint64_t(255)}) == Ieee802154MacServiceAdmission::ACCEPTED);
+            ASSERT(root->submitSet(21,{"macDsn",uint64_t(255)}) == Ieee802154MacServiceAdmission::ACCEPTED);
+            ASSERT(root->submitSet(22,{"macEbsn",uint64_t(255)}) == Ieee802154MacServiceAdmission::ACCEPTED);
+            wait(SimTime(1,SIMTIME_MS)); // Let the SET-triggered idle PHY transition complete.
+            physicallayer::Ieee802154PhyChannel channel{physicallayer::Ieee802154PhyChannel::Phy::O_QPSK,physicallayer::Ieee802154PhyChannel::Band::MHZ_2450,20};
+            for (int n = 0; n < 3; ++n) {
+                Ieee802154MacBeaconRequest beacon{channel}; beacon.enhanced = n != 0; beacon.sequenceSuppressed = n == 2;
+                auto admission = management->submitBeacon(30 + n,beacon);
+                if (admission != Ieee802154MacServiceAdmission::ACCEPTED)
+                    throw cRuntimeError("counter beacon %d admission %d",n,int(admission));
+                for (int i = 0; i < 40 && confirms < n + 1; ++i) wait(SimTime(1,SIMTIME_MS));
+                ASSERT(confirms == n + 1);
+                wait(SimTime(1,SIMTIME_MS)); // The confirm can precede PHY return to idle.
+            }
+            auto packet = new Packet("counter-data"); packet->insertAtBack(makeShared<BytesChunk>(std::vector<uint8_t>{0x5a}));
+            Ieee802154MacDataRequest data; data.sourceAddressMode = Ieee802154Address::AddressType::EXTENDED;
+            data.destinationAddress = Ieee802154Address::fromExtended(0x0401123456789abcULL); data.destinationPanId = 0x1234;
+            ASSERT(root->submitData(33,packet,data) == Ieee802154MacServiceAdmission::ACCEPTED);
+            for (int i = 0; i < 40 && !dataConfirms; ++i) wait(SimTime(1,SIMTIME_MS));
+            ASSERT(dataConfirms == 1 && received == 4);
+            ASSERT(root->submitReset(34,{false}) == Ieee802154MacServiceAdmission::ACCEPTED);
+            for (int i = 0; i < 40 && !resets; ++i) wait(SimTime(1,SIMTIME_MS));
+            ASSERT(resets == 1);
+            ASSERT(root->submitGet(40,{"macBsn"}) == Ieee802154MacServiceAdmission::ACCEPTED);
+            ASSERT(root->submitGet(41,{"macDsn"}) == Ieee802154MacServiceAdmission::ACCEPTED);
+            ASSERT(root->submitGet(42,{"macEbsn"}) == Ieee802154MacServiceAdmission::ACCEPTED);
+            ASSERT(counterGets == 3); emit(registerSignal("verificationComplete"),1L); return;
+        }
+        if ((scenario >= 2 && scenario <= 12) || scenario == 14 || (scenario >= 17 && scenario <= 19) || scenario == 21 || (scenario >= 26 && scenario <= 27) || (scenario >= 29 && scenario <= 37) || (scenario >= 42 && scenario <= 48) || scenario >= 51) {
+            ASSERT(root->submitSet(2,{"macEbHeaderIeList",std::vector<Ieee802154InformationElements::Header>{{0,scenario == 27 ? std::vector<uint8_t>{1,2,3,4,5,6} : std::vector<uint8_t>{1,2,3}}}}) == Ieee802154MacServiceAdmission::ACCEPTED);
+            ASSERT(child->submitSet(1,{"macMinBe",uint64_t(0)}) == Ieee802154MacServiceAdmission::ACCEPTED);
+            if (scenario == 4) ASSERT(root->submitSet(3,{"macAssociationPermit",true}) == Ieee802154MacServiceAdmission::ACCEPTED);
+            if (scenario == 6) ASSERT(root->submitSet(3,{"macEbFilteringEnabled",false}) == Ieee802154MacServiceAdmission::ACCEPTED);
+            if (scenario == 9 || scenario == 14 || scenario == 53 || scenario == 54) ASSERT(root->submitSet(3,{"macBeaconAutoRespond",false}) == Ieee802154MacServiceAdmission::ACCEPTED);
+            if (scenario == 32) ASSERT(root->submitSet(3,{"macEbAutoSa",uint64_t(1)}) == Ieee802154MacServiceAdmission::ACCEPTED);
+            if (scenario == 33) ASSERT(root->submitSet(3,{"macEbPayloadIeList",std::vector<Ieee802154InformationElements::Payload>{{0,{1,2,3}}}}) == Ieee802154MacServiceAdmission::ACCEPTED);
+            if (scenario == 37) { ASSERT(root->submitSet(3,{"macEbAutoSa",uint64_t(0)}) == Ieee802154MacServiceAdmission::ACCEPTED); ASSERT(child->submitSet(2,{"macShortAddress",uint64_t(2)}) == Ieee802154MacServiceAdmission::ACCEPTED); ASSERT(child->submitSet(3,{"macAutoRequest",false}) == Ieee802154MacServiceAdmission::ACCEPTED); }
+            if (scenario == 42) { auto nested = Ieee802154InformationElements::encodeNested({{false,0x40,{1,2,3}}}); ASSERT(root->submitSet(3,{"macEbPayloadIeList",std::vector<Ieee802154InformationElements::Payload>{{1,nested}}}) == Ieee802154MacServiceAdmission::ACCEPTED); }
+            if (scenario == 44) ASSERT(root->submitSet(3,{"macEbPayloadIeList",std::vector<Ieee802154InformationElements::Payload>{{2,{1,2,3}}}}) == Ieee802154MacServiceAdmission::ACCEPTED);
+            if (scenario == 46) { ASSERT(root->submitSet(3,{"macEbAutoSa",uint64_t(0)}) == Ieee802154MacServiceAdmission::ACCEPTED); ASSERT(child->submitSet(2,{"macAutoRequest",false}) == Ieee802154MacServiceAdmission::ACCEPTED); }
+            physicallayer::Ieee802154PhyChannel channel{physicallayer::Ieee802154PhyChannel::Phy::O_QPSK,physicallayer::Ieee802154PhyChannel::Band::MHZ_2450,20};
+            if (scenario == 29 || scenario == 30) {
+                if (scenario == 30) ASSERT(root->submitSet(6,{"macBeaconAutoRespond",false}) == Ieee802154MacServiceAdmission::ACCEPTED);
+                Ieee802154MacScanRequest passive; passive.type = Ieee802154ScanType::PASSIVE; passive.channels = {channel}; passive.duration = 3000;
+                ASSERT(management->submitScan(60,passive) == Ieee802154MacServiceAdmission::ACCEPTED);
+                wait(SimTime(3,SIMTIME_MS));
+            }
+            Ieee802154MacScanRequest scan; scan.type = Ieee802154ScanType::ENHANCED_ACTIVE_SCAN; scan.channels = {channel}; scan.duration = 3000;
+            if (scenario == 3 || scenario == 4) { Ieee802154EnhancedBeaconFilter filter; filter.permitJoining = true; scan.filter = filter; }
+            if (scenario == 5 || scenario == 6 || scenario == 11 || scenario == 12) { Ieee802154EnhancedBeaconFilter filter; filter.responsePercent = scenario == 11 ? 100 : scenario == 12 ? 50 : 0; scan.filter = filter; }
+            if (scenario == 7) scan.requestedHeaderIds = {0x2b};
+            if (scenario == 8) scan.requestedHeaderIds = {0};
+            if (scenario == 10) { Ieee802154EnhancedBeaconFilter filter; filter.responsePercent = 101; scan.filter = filter; }
+            if (scenario == 14 || scenario == 21) { Ieee802154EnhancedBeaconFilter filter; filter.responsePercent = 100; filter.requestedAttributes = {0}; scan.filter = filter; }
+            if (scenario == 17) scan.requestedHeaderIds = {0x12};
+            if (scenario == 18) scan.requestedNestedIds = {{false,0x3a}};
+            if (scenario == 19) scan.requestedNestedIds = {{true,3}};
+            if (scenario == 26) scan.payloadIes = {{0,{}}};
+            if (scenario == 31) scan.panIdSuppressed = true;
+            if (scenario == 33) scan.payloadIes = {{0,{}}};
+            if ((scenario >= 34 && scenario <= 37) || scenario == 46) scan.headerIes = {{0,{1,2,3,4,5,6}}};
+            if (scenario == 42) scan.requestedNestedIds = {{false,0x40}};
+            if (scenario == 43) scan.requestedNestedIds = {{false,0x2c}};
+            if (scenario == 44) scan.payloadIes = {{2,{}}};
+            if (scenario == 45) { scan.destinationAddress = Ieee802154Address::fromShort(1); scan.destinationPanId = 0x1234; }
+            rngBefore = getModuleByPath("^.host[0].nic.mac")->getRNG(1)->getNumbersDrawn();
+            ASSERT(childManagement->submitScan(scenario == 37 ? 4 : scenario == 46 ? 3 : 2,scan) == Ieee802154MacServiceAdmission::ACCEPTED);
+            for (int i = 0; i < 90 && !scans; ++i) wait(SimTime(1,SIMTIME_MS));
+            if (scenario == 47 || scenario == 48) {
+                ASSERT(interrupted == 1 && received == 0);
+                auto restart = new ModuleStartOperation; LifecycleOperation::StringMap parameters;
+                restart->initialize(getModuleByPath(scenario == 47 ? "^.host[0].nic.mac" : "^.host[0].nic.phy"),parameters);
+                ASSERT(initiateOperation(restart)); wait(SimTime(5,SIMTIME_MS)); ASSERT(interrupted == 1 && received == 0);
+            }
+            if (scenario == 29 || scenario == 30) { for (int i = 0; i < 80 && !rootScans; ++i) wait(SimTime(1,SIMTIME_MS)); wait(SimTime(5,SIMTIME_MS)); ASSERT(rootScans == 1 && requestRx == 1 && requests == 0); }
+            bool noResponse = scenario == 3 || scenario == 5 || scenario == 7 || scenario == 10 || (scenario >= 17 && scenario <= 19) || scenario == 26 || scenario == 29 || scenario == 30 || scenario == 31 || scenario == 32 || (scenario >= 34 && scenario <= 36) || scenario == 43 || scenario == 47 || scenario == 48;
+            if (scenario != 12) ASSERT(received == (noResponse ? 0 : 1));
+            ASSERT(scans == 1 && ((scenario != 9 && scenario != 14) || (requests == 1 && confirms == 1)) && ((scenario != 14 && scenario != 21) || requestRx == 1));
+            if (scenario >= 51) ASSERT(requestRx == 1 && requests == (scenario >= 53 ? 1 : 0) && confirms == (scenario >= 53 ? 1 : 0));
+            if (scenario == 27) ASSERT(notices == 1);
+            if ((scenario >= 34 && scenario <= 37) || scenario == 45 || scenario == 46) ASSERT(requestRx == 1);
+            if (scenario == 37 || scenario == 46) ASSERT(notices == 1);
+            if (scenario == 5 || scenario == 6 || scenario == 11 || scenario == 12 || scenario == 21)
+                ASSERT(getModuleByPath("^.host[0].nic.mac")->getRNG(1)->getNumbersDrawn() == rngBefore + (scenario == 12 ? 1 : 0));
+            emit(registerSignal("verificationComplete"),1L); return;
+        }
+        ASSERT(root->submitSet(2,{"macEbsn",uint64_t(255)}) == Ieee802154MacServiceAdmission::ACCEPTED);
+        if (scenario == 28) { ASSERT(root->submitSet(3,{"macBeaconPayload",std::vector<uint8_t>{0x5a}}) == Ieee802154MacServiceAdmission::ACCEPTED); wait(SimTime(1,SIMTIME_MS)); }
+        ASSERT(child->submitSet(1,{"macAutoRequest",false}) == Ieee802154MacServiceAdmission::ACCEPTED);
+        physicallayer::Ieee802154PhyChannel channel{physicallayer::Ieee802154PhyChannel::Phy::O_QPSK,physicallayer::Ieee802154PhyChannel::Band::MHZ_2450,20};
+        Ieee802154MacBeaconRequest request{channel}; request.enhanced = true; request.sequenceSuppressed = suppressed;
+        request.headerIes = {{0,{1,2,3}}};
+        if (scenario == 13) request.destinationAddress = Ieee802154Address::fromExtended(0x0401123456789abcULL);
+        if (scenario == 15) request.destinationAddress = Ieee802154Address::fromExtended(0x0601123456789abcULL);
+        if (scenario == 38) request.sourceAddressMode = Ieee802154Address::AddressType::NONE;
+        if (scenario == 39) { request.sourceAddressMode = Ieee802154Address::AddressType::SHORT; request.destinationAddress = Ieee802154Address(); }
+        auto beaconAdmission = management->submitBeacon(scenario == 28 ? 4 : 3,request);
+        if (beaconAdmission != Ieee802154MacServiceAdmission::ACCEPTED)
+            throw cRuntimeError("beacon scenario=%d admission=%d",scenario,int(beaconAdmission));
+        for (int i = 0; i < 60 && (!confirms || ((scenario != 15 && scenario != 16) && !notices)); ++i) wait(SimTime(1,SIMTIME_MS));
+        if (scenario == 15 || scenario == 16) wait(SimTime(5,SIMTIME_MS));
+        ASSERT(confirms == 1 && notices == (scenario == 15 || scenario == 16 ? 0 : 1) && received == 1);
+        ASSERT(root->submitGet(scenario == 28 ? 5 : 4,{"macEbsn"}) == Ieee802154MacServiceAdmission::ACCEPTED);
+        ASSERT(gets == 1); emit(registerSignal("verificationComplete"),1L);
+    }
+  public:
+    EnhancedBeaconExercise() : cSimpleModule(65536) {}
+    void receiveSignal(cComponent *source,simsignal_t,cObject *object,cObject *) override {
+        Enter_Method("receiveSignal"); auto frame = Ieee802154FrameCodec::decode(check_and_cast<Packet *>(object)->peekDataAsBytes()->getBytes());
+        if (source == getModuleByPath("^.host[0].nic.mac")) {
+            if (scenario >= 51) { ASSERT(frame->getFrameType() == 3 && frame->getFrameVersion() == 2 && frame->getFcsValid() && frame->getFramePending() == (scenario == 52 || scenario == 53)); ++requestRx; return; }
+            if (scenario == 49 || scenario == 50) { ASSERT(frame->getFrameType() == 3 && frame->getFrameVersion() == 2 && frame->getFcsValid()); ++requestRx; return; }
+            if (scenario == 47 || scenario == 48) {
+                ASSERT(frame->getFrameType() == 0 && frame->getFrameVersion() == 2 && interrupted == 0); ++interrupted;
+                auto stop = new ModuleStopOperation; LifecycleOperation::StringMap parameters;
+                stop->initialize(getModuleByPath(scenario == 47 ? "^.host[0].nic.mac" : "^.host[0].nic.phy"),parameters);
+                ASSERT(initiateOperation(stop)); return;
+            }
+            if (scenario == 37) { ASSERT(frame->getFrameType() == 3 && frame->getFrameVersion() == 2 && frame->getFcsValid() && frame->getSourceAddress() == Ieee802154Address::fromShort(2)); ++requestRx; return; }
+            if (scenario == 45 || scenario == 46) { ASSERT(frame->getFrameType() == 3 && frame->getFrameVersion() == 2 && frame->getFcsValid()); if (scenario == 45) ASSERT(frame->getSourceAddress() == Ieee802154Address::fromExtended(0x0401123456789abcULL) && frame->getDestinationAddress() == Ieee802154Address::fromShort(1) && Ieee802154FrameCodec::sourcePanField(*frame) == uint16_t(0x1234) && Ieee802154FrameCodec::destinationPanField(*frame) == uint16_t(0x1234)); else ASSERT(frame->getSourceAddress().isNone() && frame->getDestinationAddress().isShortBroadcast()); ++requestRx; return; }
+            if (scenario >= 34 && scenario <= 36) {
+                ASSERT(frame->getFrameType() == 3 && frame->getFrameVersion() == 2);
+                if (scenario == 34) ASSERT(!frame->getFcsValid());
+                else if (scenario == 35) ASSERT(frame->getDecodeStatus() != Ieee802154FrameCodec::OK);
+                else ASSERT(frame->getDecodeStatus() == Ieee802154FrameCodec::OK && frame->getFcsValid() && frame->getSecurityEnabled());
+                ++requestRx; return;
+            }
+            ASSERT(frame->getSourceAddress() == Ieee802154Address::fromExtended(0x0401123456789abcULL));
+            if (scenario == 29 || scenario == 30) { ASSERT(frame->getFrameType() == 3 && frame->getFrameVersion() == 2 && frame->getFcsValid()); ++requestRx; return; }
+            ASSERT((scenario == 14 || scenario == 21) && frame->getDecodeStatus() == Ieee802154FrameCodec::OK && frame->getFcsValid() && frame->getFrameType() == 3);
+            auto view = std::get<Ieee802154InformationElements::View>(Ieee802154InformationElements::inspect(*frame));
+            auto nested = std::get<std::vector<Ieee802154InformationElements::Nested>>(Ieee802154InformationElements::inspectNested(view.payloads[0]));
+            ASSERT(nested.size() == 1 && nested[0].content == std::vector<uint8_t>({0xec,100,0x80})); ++requestRx; return;
+        }
+        if (scenario == 49 || scenario == 50) { if (scenario == 50 && scans == 1 && frame->getFrameType() == 0) { ASSERT(frame->getFrameVersion() == 2 && Ieee802154FrameCodec::sequenceNumber(*frame) == uint8_t(255)); ++received; return; } ASSERT(frame->getFrameType() == 1); return; }
+        if (scenario == 20) {
+            ASSERT(frame->getDecodeStatus() == Ieee802154FrameCodec::OK && frame->getFcsValid());
+            ASSERT(received < 3 ? frame->getFrameType() == 0 : frame->getFrameType() == 1);
+            ASSERT(frame->getFrameVersion() == (received == 0 ? 0 : received < 3 ? 2 : 1));
+            auto sequence = Ieee802154FrameCodec::sequenceNumber(*frame);
+            ASSERT(received == 2 ? !sequence : sequence == uint8_t(255)); ++received; return;
+        }
+        ASSERT(frame->getDecodeStatus() == Ieee802154FrameCodec::OK && frame->getFcsValid() && frame->getFrameType() == 0 && frame->getFrameVersion() == 2 && frame->getSequenceSuppressed() == suppressed && frame->getInformationElementsPresent()); ++received;
+        if (scenario == 16) ASSERT(Ieee802154FrameCodec::sourcePanField(*frame) == uint16_t(0x2345));
+        if (scenario == 38) ASSERT(frame->getSourceAddress().isNone() && !Ieee802154FrameCodec::sourcePanField(*frame));
+        if (scenario == 39) ASSERT(frame->getSourceAddress() == Ieee802154Address::fromShort(1) && frame->getDestinationAddress().isNone());
+        if (scenario == 37) { ASSERT(frame->getSourceAddress().isNone() && frame->getDestinationAddress() == Ieee802154Address::fromShort(2) && !Ieee802154FrameCodec::sourcePanField(*frame) && Ieee802154FrameCodec::destinationPanField(*frame) == uint16_t(0x1234)); }
+        if (scenario == 46) ASSERT(frame->getSourceAddress().isNone() && frame->getDestinationAddress().isShortBroadcast() && !Ieee802154FrameCodec::sourcePanField(*frame) && Ieee802154FrameCodec::destinationPanField(*frame) == uint16_t(0x1234));
+        if (scenario == 42 || scenario == 44) { auto view = std::get<Ieee802154InformationElements::View>(Ieee802154InformationElements::inspect(*frame)); ASSERT(view.payloads.size() == 1 && view.payloads[0].group == (scenario == 42 ? 1 : 2)); if (scenario == 42) { auto nested = std::get<std::vector<Ieee802154InformationElements::Nested>>(Ieee802154InformationElements::inspectNested(view.payloads[0])); ASSERT(nested.size() == 1 && nested[0].id == 0x40 && nested[0].content == std::vector<uint8_t>({1,2,3})); } else ASSERT(view.payloads[0].content == std::vector<uint8_t>({1,2,3})); }
+        if ((scenario >= 2 && scenario <= 12 && scenario != 10) || scenario == 14 || scenario == 21 || scenario == 27 || scenario == 33 || scenario >= 51) {
+            ASSERT(frame->getDestinationAddress() == Ieee802154Address::fromExtended(0x0401123456789abcULL));
+            ASSERT(Ieee802154FrameCodec::destinationPanField(*frame) == uint16_t(0x1234) && !Ieee802154FrameCodec::sourcePanField(*frame));
+        }
+        if (scenario == 28) { auto view = std::get<Ieee802154InformationElements::View>(Ieee802154InformationElements::inspect(*frame)); ASSERT(view.data.length == 1 && frame->getPayload(view.data.offset - view.fixedMhr.length) == 0x5a); }
+    }
+    void handleGetConfirm(uint64_t id,const Ieee802154MacGetConfirm& c) override { Enter_Method("handleGetConfirm"); if (scenario == 50) { ASSERT(id == uint64_t(5 + counterGets) && c.value && std::get<uint64_t>(*c.value) == (counterGets == 0 ? 255 : 0)); ++counterGets; return; } if (scenario == 22 || scenario == 23) { ASSERT(id == 52 && (scenario == 22 ? bool(c.value) : c.result == Ieee802154MacServiceResult(Ieee802154MacStatus::UNSUPPORTED_ATTRIBUTE))); ++counterGets; return; } if (scenario == 20) { ASSERT(id >= 40 && id <= 42 && c.value && std::get<uint64_t>(*c.value) == 0); ++counterGets; return; } ASSERT(id == (scenario == 28 ? 5 : 4) && c.value && std::get<uint64_t>(*c.value) == (suppressed ? 255 : 0)); ++gets; }
+    void handleSetConfirm(uint64_t,const Ieee802154MacSetConfirm& c) override { Enter_Method("handleSetConfirm"); ASSERT(c.result == Ieee802154MacServiceResult(Ieee802154MacStatus::SUCCESS)); }
+    void handleResetConfirm(uint64_t id,const Ieee802154MacResetConfirm& c) override { ASSERT(((scenario == 20 && id == 34) || ((scenario == 22 || scenario == 23) && id == uint64_t(50 + resets)) || (scenario == 41 && id == 3 && scans == 1)) && c.result == Ieee802154MacServiceResult(Ieee802154MacStatus::SUCCESS)); ++resets; }
+    void handleDataConfirm(uint64_t id,const Ieee802154MacDataConfirm& c) override { ASSERT((scenario == 20 && id == 33 && c.result == Ieee802154MacServiceResult(Ieee802154MacStatus::SUCCESS)) || ((scenario == 49 || scenario == 50) && id == uint64_t(scenario == 50 ? 4 : 3) && c.result == Ieee802154MacServiceResult(Ieee802154MacServiceAbortReason::STOPPED))); ++dataConfirms; }
+    void handleDataIndication(Packet *p,const Ieee802154MacDataIndication&) override { take(p); delete p; ASSERT(scenario == 20 || scenario == 49 || scenario == 50); if (scenario == 49 || scenario == 50) { physicallayer::Ieee802154PhyChannel channel{physicallayer::Ieee802154PhyChannel::Phy::O_QPSK,physicallayer::Ieee802154PhyChannel::Band::MHZ_2450,20}; Ieee802154MacScanRequest scan; scan.type = Ieee802154ScanType::ENHANCED_ACTIVE_SCAN; scan.channels = {channel}; scan.duration = 3000; ASSERT(childManagement->submitScan(2,scan) == Ieee802154MacServiceAdmission::ACCEPTED); } }
+    void handlePromiscuousIndication(Packet *p,const Ieee802154MacPromiscuousIndication&) override { take(p); delete p; ASSERT(false); }
+    void handleCommStatusIndication(Packet *p,const Ieee802154MacCommStatusIndication&) override { if (p) { take(p); delete p; } ASSERT(false); }
+    void handleBeaconConfirm(uint64_t id,const Ieee802154MacBeaconConfirm& c) override { Enter_Method("handleBeaconConfirm"); if (scenario == 24 || scenario == 25) { ASSERT(id == 53 && c.result == Ieee802154MacServiceResult(scenario == 24 ? Ieee802154MacStatus::FRAME_TOO_LONG : Ieee802154MacStatus::UNSUPPORTED_SECURITY)); ++rejectedBeacons; return; } ASSERT(id == (scenario == 20 ? 30 + confirms : scenario == 9 || scenario == 14 || scenario >= 53 ? 10 : scenario == 28 ? 4 : 3) && c.result == Ieee802154MacServiceResult(Ieee802154MacStatus::SUCCESS)); ++confirms; }
+    void handleBeaconNotifyIndication(const Ieee802154PanDescriptor& d) override { Enter_Method("handleBeaconNotifyIndication"); bool omitted = scenario == 13 || scenario == 14 || scenario == 27 || scenario == 37 || scenario == 38 || scenario == 46; ASSERT(scenario != 15 && scenario != 16 && d.frameVersion == 2 && !d.contentAvailable && d.coordinatorPanId == uint16_t(0x1234) && (omitted ? !d.sourcePanId : d.sourcePanId == uint16_t(0x1234)) && d.sequenceNumber.has_value() == !suppressed && d.headerIes.size() == 1 && d.headerIes[0].id == 0 && d.headerIes[0].content == std::vector<uint8_t>({1,2,3})); if (scenario == 37 || scenario == 38 || scenario == 46) ASSERT(d.coordinatorAddress.isNone()); if (scenario == 39) ASSERT(d.coordinatorAddress == Ieee802154Address::fromShort(1)); if (scenario == 27 || scenario == 28) ASSERT(d.enhancedPayload == std::vector<uint8_t>({0x5a})); ++notices; }
+    void handlePollConfirm(uint64_t,const Ieee802154MacPollConfirm&) override { ASSERT(false); }
+    void handlePurgeConfirm(uint64_t,const Ieee802154MacPurgeConfirm&) override { ASSERT(false); }
+    void handleStartConfirm(uint64_t,const Ieee802154MacStartConfirm&) override { ASSERT(false); }
+    void handleStartSuperframeConfirm(uint64_t,const Ieee802154MacStartSuperframeConfirm&) override { ASSERT(false); }
+    void handleSyncConfirm(uint64_t,const Ieee802154MacSyncConfirm&) override { ASSERT(false); }
+    void handleScanConfirm(uint64_t id,const Ieee802154MacScanConfirm& c) override {
+        Enter_Method("handleScanConfirm"); if (scenario == 49 || scenario == 50) { if (scenario == 50 && id == 3) ASSERT(c.result == Ieee802154MacServiceResult(Ieee802154MacStatus::SUCCESS) && c.panDescriptors.size() == 1); else ASSERT(id == 2 && c.result == Ieee802154MacServiceResult(Ieee802154MacStatus::NO_BEACON) && c.panDescriptors.empty()); ++scans; return; } if (scenario == 40 || scenario == 41) { ASSERT(id == 2 && c.result == Ieee802154MacServiceResult(scenario == 40 ? Ieee802154MacServiceAbortReason::CANCELLED : Ieee802154MacServiceAbortReason::RESET)); ++scans; return; } if ((scenario == 29 || scenario == 30) && id == 60) { ASSERT(c.result == Ieee802154MacServiceResult(Ieee802154MacStatus::SUCCESS) && c.panDescriptors.empty()); ++rootScans; return; } ASSERT(((scenario >= 2 && scenario <= 12) || scenario == 14 || (scenario >= 17 && scenario <= 19) || scenario == 21 || (scenario >= 26 && scenario <= 27) || (scenario >= 29 && scenario <= 37) || (scenario >= 42 && scenario <= 48) || scenario >= 51) && id == uint64_t(scenario == 37 ? 4 : scenario == 46 ? 3 : 2));
+        auto expected = scenario == 10 || (scenario >= 17 && scenario <= 19) || scenario == 31 ? Ieee802154MacStatus::INVALID_PARAMETER :
+                scenario == 3 || scenario == 5 || scenario == 7 || scenario == 26 || scenario == 29 || scenario == 30 || scenario == 32 || (scenario >= 34 && scenario <= 36) || scenario == 43 || scenario == 47 || scenario == 48 ? Ieee802154MacStatus::NO_BEACON : Ieee802154MacStatus::SUCCESS;
+        if (scenario == 12) expected = received ? Ieee802154MacStatus::SUCCESS : Ieee802154MacStatus::NO_BEACON;
+        ASSERT(c.result == Ieee802154MacServiceResult(expected));
+        if (expected == Ieee802154MacStatus::SUCCESS && (scenario == 37 || scenario == 46)) ASSERT(c.panDescriptors.empty());
+        else if (expected == Ieee802154MacStatus::SUCCESS) ASSERT(c.panDescriptors.size() == 1 && c.panDescriptors[0].frameVersion == 2 && !c.panDescriptors[0].contentAvailable && c.panDescriptors[0].coordinatorPanId == uint16_t(0x1234) && c.panDescriptors[0].headerIes.size() == 1 && c.panDescriptors[0].headerIes[0].content == std::vector<uint8_t>({1,2,3}));
+        else ASSERT(c.panDescriptors.empty()); ++scans;
+    }
+    void handleBeaconRequestIndication(const Ieee802154MacBeaconRequestIndication& i) override {
+        Enter_Method("handleBeaconRequestIndication"); ASSERT((scenario == 9 || scenario == 14 || scenario == 53 || scenario == 54) && i.enhanced && i.destinationPanId == uint16_t(0xffff));
+        if (scenario == 9 || scenario == 53 || scenario == 54) ASSERT(!i.filter);
+        else {
+            ASSERT(i.filter && i.filter->responsePercent == uint8_t(100) && i.filter->requestedAttributes == std::vector<uint8_t>({0}));
+            ASSERT(i.payloadIes.size() == 1 && i.payloadIes[0].group == 1);
+            auto nested = std::get<std::vector<Ieee802154InformationElements::Nested>>(Ieee802154InformationElements::inspectNested(i.payloadIes[0]));
+            ASSERT(nested.size() == 1 && nested[0].content == std::vector<uint8_t>({0xec,100,0x80}));
+        }
+        ++requests;
+        physicallayer::Ieee802154PhyChannel channel{physicallayer::Ieee802154PhyChannel::Phy::O_QPSK,physicallayer::Ieee802154PhyChannel::Band::MHZ_2450,20};
+        Ieee802154MacBeaconRequest response{channel}; response.enhanced = true; response.headerIes = {{0,{1,2,3}}};
+        response.destinationAddress = i.sourceAddress;
+        ASSERT(management->submitBeacon(10,response) == Ieee802154MacServiceAdmission::ACCEPTED);
+    }
+    void handleAssociateResponseStatus(uint64_t,const Ieee802154MacAssociateResponseStatus&) override { ASSERT(false); }
+    void handleAssociateConfirm(uint64_t,const Ieee802154MacAssociateConfirm&) override { ASSERT(false); }
+    void handleAssociateIndication(const Ieee802154MacAssociateIndication&) override { ASSERT(false); }
+    void handleDisassociateConfirm(uint64_t,const Ieee802154MacDisassociateConfirm&) override { ASSERT(false); }
+    void handleDisassociateIndication(const Ieee802154MacDisassociateIndication&) override { ASSERT(false); }
+    void handleOrphanIndication(const Ieee802154MacOrphanIndication&) override { ASSERT(false); }
+    void handleOrphanResponseStatus(uint64_t,const Ieee802154MacOrphanResponseStatus&) override { ASSERT(false); }
+    void handleSyncLossIndication(const Ieee802154MacSyncLossIndication&) override { ASSERT(false); }
+    void handleRxEnableConfirm(uint64_t,const Ieee802154MacRxEnableConfirm&) override { ASSERT(false); }
+    void handleRxEnableIndication(const Ieee802154MacRxEnableIndication&) override { ASSERT(false); }
+    void handleGtsConfirm(uint64_t,const Ieee802154MacGtsConfirm&) override { ASSERT(false); }
+    void handleGtsIndication(const Ieee802154MacGtsIndication&) override { ASSERT(false); }
+};
+Define_Module(EnhancedBeaconExercise);
+}
+
+%file: EnhancedBeaconFixture.ned
+import inet.common.SimpleModule;
+import inet.mobility.static.StationaryMobility;
+import inet.protocoltest.TapRadioMedium;
+import inet.linklayer.ieee802154.Ieee802154StandardInterface;
+import inet.linklayer.ieee802154.contract.IIeee802154MacServiceClient;
+import inet.linklayer.ieee802154.contract.IIeee802154ManagementServiceClient;
+simple EnhancedBeaconExercise extends SimpleModule like IIeee802154MacServiceClient, IIeee802154ManagementServiceClient {
+    parameters: string serviceModule; string childModule; int scenario; @class(::inet::EnhancedBeaconExercise); @signal[verificationComplete](type=long);
+}
+module EnhancedBeaconHost {
+    parameters: @networkNode;
+    submodules:
+        mobility: StationaryMobility;
+        nic: Ieee802154StandardInterface { panId = 4660; rxOnWhenIdle = true; enableManagement = true; mac.clientModule = "^.^.^.exercise"; mac.managementClientModule = "^.^.^.exercise"; }
+    connections allowunconnected:
+}
+network EnhancedBeaconTest {
+    parameters: int scenario;
+    submodules:
+        radioMedium: TapRadioMedium;
+        host[2]: EnhancedBeaconHost;
+        exercise: EnhancedBeaconExercise { serviceModule = "^.host[0].nic.mac"; childModule = "^.host[1].nic.mac"; scenario = parent.scenario; }
+}
+
+%inifile: omnetpp.ini
+[General]
+network = EnhancedBeaconTest
+sim-time-limit = 200ms
+cmdenv-express-mode = true
+cmdenv-stop-batch-on-error = false
+*.scenario = ${scenario=0..54}
+num-rngs = 2
+*.host[*].nic.radio.sendRawBytes = ${raw=false,true}
+*.host[0].nic.mac.isPanCoordinator = ${scenario} >= 2
+*.host[0].nic.mac.dsnRng = 1
+*.host[0].nic.mac.rng-1 = 1
+*.host[0].nic.enableEnhancedFrames = ${scenario} != 23
+*.host[*].nic.enableEnhancedFrames = true
+*.host[0].nic.shortAddress = 1
+*.host[0].nic.extendedAddress = "extended:02-01-12-34-56-78-9A-BC"
+*.host[1].nic.extendedAddress = "extended:04-01-12-34-56-78-9A-BC"
+*.host[*].nic.radio.antenna.mobilityModule = "^.^.^.mobility"
+*.radioMedium.backgroundNoise.power = -110dBm
+*.radioMedium.signalAnalogRepresentation = "scalar"
+*.host[*].mobility.initFromDisplayString = false
+*.host[0].mobility.initialX = 0m
+*.host[1].mobility.initialX = 1m
+*.host[*].mobility.initialY = 0m
+*.host[*].mobility.initialZ = 0m
+*.host[*].mobility.constraintAreaMinX = 0m
+*.host[*].mobility.constraintAreaMinY = 0m
+*.host[*].mobility.constraintAreaMinZ = 0m
+*.host[*].mobility.constraintAreaMaxX = 100m
+*.host[*].mobility.constraintAreaMaxY = 100m
+*.host[*].mobility.constraintAreaMaxZ = 100m
+
+%contains: stdout
+PROTOCOLTEST ieee802154_enhanced_beacon: PASS
+
+%not-contains: stdout
+PROTOCOLTEST ieee802154_enhanced_beacon: FAIL
+
+%not-contains: stderr
+Error:

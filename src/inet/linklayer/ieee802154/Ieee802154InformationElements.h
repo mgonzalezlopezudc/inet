@@ -16,8 +16,8 @@ class INET_API Ieee802154InformationElements
 {
   public:
     struct Region { size_t offset = 0; size_t length = 0; };
-    struct Header { uint8_t id; std::vector<uint8_t> content; };
-    struct Payload { uint8_t group; std::vector<uint8_t> content; };
+    struct Header { uint8_t id; std::vector<uint8_t> content; bool operator==(const Header& other) const { return id == other.id && content == other.content; } };
+    struct Payload { uint8_t group; std::vector<uint8_t> content; bool operator==(const Payload& other) const { return group == other.group && content == other.content; } };
     struct Nested { bool longForm; uint8_t id; std::vector<uint8_t> content; };
     struct View {
         Region fixedMhr, auxiliary, headerIes, payloadIes, data, fcs;

@@ -1,0 +1,35 @@
+%description:
+Enhanced PIB fields are profile-gated, copied, validated and reset by the existing PIB owner.
+
+%includes:
+#include "inet/linklayer/ieee802154/Ieee802154MacPib.h"
+using namespace inet;
+
+%activity:
+using Status = Ieee802154MacStatus;
+auto identity = Ieee802154Address::fromExtended(0x0201123456789abcULL);
+Ieee802154MacPib legacy(identity,7);
+ASSERT(legacy.get("macEbsn").result == Ieee802154MacServiceResult(Status::UNSUPPORTED_ATTRIBUTE));
+ASSERT(legacy.set("macEbAutoSa",uint64_t(2)) == Status::UNSUPPORTED_ATTRIBUTE);
+Ieee802154MacPib enhanced(identity,7,128,{},8,false,true,9);
+ASSERT(std::get<uint64_t>(*enhanced.get("macEbsn").value) == 9);
+ASSERT(std::get<uint64_t>(*enhanced.get("macEbAutoSa").value) == 2);
+ASSERT(std::get<bool>(*enhanced.get("macEbFilteringEnabled").value));
+ASSERT(enhanced.set("macEbsn",uint64_t(255)) == Status::SUCCESS);
+ASSERT(enhanced.set("macEbAutoSa",uint64_t(3)) == Status::INVALID_PARAMETER);
+std::vector<Ieee802154InformationElements::Header> headers{{0,{1,2,3}}};
+ASSERT(enhanced.set("macEbHeaderIeList",headers) == Status::SUCCESS);
+headers[0].content.clear();
+auto copied = std::get<std::vector<Ieee802154InformationElements::Header>>(*enhanced.get("macEbHeaderIeList").value);
+ASSERT(copied.size() == 1 && copied[0].content == std::vector<uint8_t>({1,2,3}));
+ASSERT(enhanced.set("macEbHeaderIeList",std::vector<Ieee802154InformationElements::Header>{{0x7e,{}}}) == Status::INVALID_PARAMETER);
+ASSERT(enhanced.set("macEbPayloadIeList",std::vector<Ieee802154InformationElements::Payload>{{1,{2,64,1}}}) == Status::INVALID_PARAMETER);
+enhanced.reset(false,1,2,3);
+ASSERT(std::get<uint64_t>(*enhanced.get("macEbsn").value) == 255);
+enhanced.reset(true,1,2,3);
+ASSERT(std::get<uint64_t>(*enhanced.get("macEbsn").value) == 3);
+ASSERT(std::get<std::vector<Ieee802154InformationElements::Header>>(*enhanced.get("macEbHeaderIeList").value).empty());
+std::cout << "Enhanced PIB profile and reset verified.\n";
+
+%contains: stdout
+Enhanced PIB profile and reset verified.

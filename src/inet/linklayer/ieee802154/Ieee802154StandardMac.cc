@@ -16,6 +16,7 @@
 #include "inet/common/packet/chunk/BytesChunk.h"
 #include "inet/common/FcsInd_m.h"
 #include <cmath>
+#include <type_traits>
 
 namespace inet {
 
@@ -25,6 +26,147 @@ using PhyAdmission = physicallayer::Ieee802154PhyServiceAdmission;
 using PhyState = physicallayer::Ieee802154PhyState;
 
 namespace {
+struct EnhancedBeaconRequestView {
+    std::optional<Ieee802154EnhancedBeaconFilter> filter;
+    std::vector<uint8_t> requestedHeaders;
+    std::vector<uint8_t> requestedPayloadGroups;
+    std::vector<Ieee802154RequestedNestedIe> requestedNested;
+};
+
+bool decodeBeaconFilter(const std::vector<uint8_t>& bytes, Ieee802154EnhancedBeaconFilter& filter)
+{
+    if (bytes.empty()) return false;
+    auto control = bytes[0]; size_t offset = 1;
+    filter.permitJoining = control & 1;
+    if (control & 2) { if (offset == bytes.size()) return false; filter.minimumLqi = bytes[offset++]; }
+    if (control & 4) { if (offset == bytes.size() || bytes[offset] > 100) return false; filter.responsePercent = bytes[offset++]; }
+    auto length = size_t((control >> 3) & 3);
+    if (bytes.size() - offset != length) return false;
+    filter.requestedAttributes.assign(bytes.begin() + offset,bytes.end());
+    if (!filter.requestedAttributes.empty()) {
+        filter.requestedAttributes[0] &= 0x7f;
+        std::fill(filter.requestedAttributes.begin() + 1,filter.requestedAttributes.end(),0);
+    }
+    return true;
+}
+
+bool allocatedRequestedHeader(uint8_t id)
+{
+    return id == 0 || (id >= 0x1a && id <= 0x1e) || (id >= 0x21 && id <= 0x2c);
+}
+
+bool allocatedRequestedNested(bool longForm, uint8_t id)
+{
+    return longForm ? id == 8 || id == 9 :
+            (id >= 0x1a && id <= 0x29) || (id >= 0x2b && id <= 0x39) || id == 0x40 || (id >= 0x46 && id <= 0x5c);
+}
+
+std::optional<std::vector<uint8_t>> encodeBeaconFilter(const Ieee802154EnhancedBeaconFilter& filter)
+{
+    if (filter.requestedAttributes.size() > 3 || (filter.responsePercent && *filter.responsePercent > 100) ||
+            (!filter.requestedAttributes.empty() && ((filter.requestedAttributes[0] & 0x80) ||
+             std::any_of(filter.requestedAttributes.begin() + 1,filter.requestedAttributes.end(),[](uint8_t value) { return value != 0; }))))
+        return {};
+    std::vector<uint8_t> bytes{uint8_t((filter.permitJoining ? 1 : 0) | (filter.minimumLqi ? 2 : 0) |
+            (filter.responsePercent ? 4 : 0) | (filter.requestedAttributes.size() << 3))};
+    if (filter.minimumLqi) bytes.push_back(*filter.minimumLqi);
+    if (filter.responsePercent) bytes.push_back(*filter.responsePercent);
+    bytes.insert(bytes.end(),filter.requestedAttributes.begin(),filter.requestedAttributes.end());
+    return bytes;
+}
+
+bool inspectEnhancedBeaconRequest(const Ieee802154InformationElements::View& view, EnhancedBeaconRequestView& result)
+{
+    for (const auto& header : view.headers)
+        if (header.content.empty()) result.requestedHeaders.push_back(header.id);
+    for (const auto& payload : view.payloads) {
+        if (payload.content.empty()) result.requestedPayloadGroups.push_back(payload.group);
+        if (payload.group != 1) continue;
+        auto parsed = Ieee802154InformationElements::inspectNested(payload);
+        auto nested = std::get_if<std::vector<Ieee802154InformationElements::Nested>>(&parsed);
+        if (!nested) return false;
+        for (const auto& element : *nested) {
+            if (!element.longForm && element.id == 0x1e) {
+                Ieee802154EnhancedBeaconFilter filter;
+                if (result.filter || !decodeBeaconFilter(element.content,filter)) return false;
+                result.filter = std::move(filter);
+            }
+            else if (element.content.empty())
+                result.requestedNested.push_back({element.longForm,element.id});
+        }
+    }
+    return true;
+}
+
+std::optional<std::vector<uint8_t>> enhancedScanPayload(const Ieee802154MacScanRequest& request)
+{
+    auto headers = request.headerIes;
+    auto payloads = request.payloadIes;
+    for (const auto& header : headers)
+        if (!allocatedRequestedHeader(header.id) || header.content.size() > 127 || (!header.content.empty() && (header.id != 0 || header.content.size() < 3))) return {};
+    for (auto id : request.requestedHeaderIds) { if (!allocatedRequestedHeader(id)) return {}; headers.push_back({id,{}}); }
+    size_t mlme = payloads.size();
+    std::vector<Ieee802154InformationElements::Nested> nested;
+    for (size_t i = 0; i < payloads.size(); ++i) {
+        if (payloads[i].group >= 3 || payloads[i].content.size() > 2047 || (payloads[i].group == 2 && !payloads[i].content.empty() && payloads[i].content.size() < 3)) return {};
+        if (payloads[i].group == 1) {
+            if (mlme != payloads.size()) return {};
+            auto parsed = Ieee802154InformationElements::inspectNested(payloads[i]);
+            auto elements = std::get_if<std::vector<Ieee802154InformationElements::Nested>>(&parsed);
+            if (!elements) return {};
+            nested = *elements; mlme = i;
+        }
+    }
+    bool existingFilter = false;
+    for (const auto& element : nested) {
+        if (!element.longForm && element.id == 0x1e) {
+            Ieee802154EnhancedBeaconFilter filter;
+            if (existingFilter || !decodeBeaconFilter(element.content,filter) || encodeBeaconFilter(filter) != element.content) return {};
+            existingFilter = true;
+        }
+        else if (!allocatedRequestedNested(element.longForm,element.id) ||
+                (!element.content.empty() && (!(element.longForm ? element.id == 8 : element.id == 0x40) || element.content.size() < 3)))
+            return {};
+    }
+    for (const auto& id : request.requestedNestedIds) {
+        if (!allocatedRequestedNested(id.longForm,id.id) || (!id.longForm && id.id == 0x1e)) return {};
+        nested.push_back({id.longForm,id.id,{}});
+    }
+    if (request.filter) {
+        if (existingFilter) return {};
+        auto filter = encodeBeaconFilter(*request.filter); if (!filter) return {};
+        nested.push_back({false,0x1e,*filter});
+    }
+    if (mlme != payloads.size() || !nested.empty()) {
+        try {
+            auto content = Ieee802154InformationElements::encodeNested(nested);
+            if (mlme == payloads.size()) payloads.push_back({1,std::move(content)});
+            else payloads[mlme].content = std::move(content);
+        }
+        catch (const cRuntimeError&) { return {}; }
+    }
+    try { return Ieee802154InformationElements::encode(headers,payloads,{7}); }
+    catch (const cRuntimeError&) { return {}; }
+}
+
+bool supportedBeaconIes(const std::vector<Ieee802154InformationElements::Header>& headers,
+        const std::vector<Ieee802154InformationElements::Payload>& payloads)
+{
+    for (const auto& header : headers)
+        if (header.id != 0 || header.content.size() < 3 || header.content.size() > 127) return false;
+    for (const auto& payload : payloads) {
+        if (payload.group > 2 || payload.content.size() > 2047 || (payload.group == 2 && payload.content.size() < 3)) return false;
+        if (payload.group == 1) {
+            auto nested = Ieee802154InformationElements::inspectNested(payload);
+            auto elements = std::get_if<std::vector<Ieee802154InformationElements::Nested>>(&nested);
+            if (!elements) return false;
+            for (const auto& element : *elements)
+                if (!(element.longForm ? element.id == 8 : element.id == 0x40) || element.content.size() < 3) return false;
+        }
+    }
+    return true;
+}
+
 std::vector<uint8_t> ackOctets(cValueArray *array)
 {
     std::vector<uint8_t> result;
@@ -177,9 +319,10 @@ void Ieee802154StandardMac::initialize(int stage)
         // IEEE 802.15.4-2024, 6.6.1: one random initial DSN per device.
         auto initialDsn = intuniform(0, 255, par("dsnRng"));
         auto initialBsn = par("enableManagement").boolValue() ? intuniform(0, 255, par("dsnRng")) : 0;
+        auto initialEbsn = par("enableEnhancedFrames").boolValue() ? intuniform(0, 255, par("dsnRng")) : 0;
         pib = std::make_unique<Ieee802154MacPib>(Ieee802154Address(par("extendedAddress")),
                 initialDsn, ccaUs,
-                std::vector<Ieee802154MacSetRequest>{{"macShortAddress", uint64_t(shortAddress)}, {"macPanId", uint64_t(panId)}, {"macRxOnWhenIdle", bool(par("rxOnWhenIdle"))}}, initialBsn, bool(superframe));
+                std::vector<Ieee802154MacSetRequest>{{"macShortAddress", uint64_t(shortAddress)}, {"macPanId", uint64_t(panId)}, {"macRxOnWhenIdle", bool(par("rxOnWhenIdle"))}}, initialBsn, bool(superframe), par("enableEnhancedFrames").boolValue(), initialEbsn);
     }
     else if (stage == INITSTAGE_LINK_LAYER) {
         auto node = findContainingNode(this);
@@ -464,11 +607,18 @@ Ieee802154MacServiceAdmission Ieee802154StandardMac::submitSet(uint64_t id, cons
         else if (phy && request.attribute.rfind("phy",0) == 0) {
             if (phyOperation)
                 return Ieee802154MacServiceAdmission::BUSY;
-            auto value = std::visit([](const auto& item) -> physicallayer::Ieee802154PhyPibValue { return item; },request.value);
+            auto value = std::visit([](const auto& item) -> std::optional<physicallayer::Ieee802154PhyPibValue> {
+                if constexpr (std::is_constructible_v<physicallayer::Ieee802154PhyPibValue,decltype(item)>) return physicallayer::Ieee802154PhyPibValue(item);
+                else return {};
+            },request.value);
+            if (!value) {
+                client->handleSetConfirm(id,{request.attribute,Ieee802154MacStatus::INVALID_PARAMETER});
+                return admission;
+            }
             managementRequest = ManagementRequest{id,request.attribute,value};
             auto internalId = allocatePhyId();
             phyOperation = PhyOperation{internalId,PhyPurpose::MANAGEMENT_SET};
-            admission = macAdmission(phy->submitSet(internalId,{request.attribute,value}));
+            admission = macAdmission(phy->submitSet(internalId,{request.attribute,*value}));
             if (admission != Ieee802154MacServiceAdmission::ACCEPTED) {
                 phyOperation.reset(); managementRequest.reset();
             }
@@ -563,7 +713,7 @@ Ieee802154MacServiceAdmission Ieee802154StandardMac::submitReset(uint64_t id, co
             if (managementClient)
                 managementClient->handleRxEnableConfirm(receiverId, {Ieee802154MacServiceAbortReason::RESET,{}});
         }
-        beaconResponses = 0;
+        beaconResponses.clear();
         pendingPanConflict.reset();
         discardAck();
         if (associationRequest)
@@ -630,7 +780,7 @@ Ieee802154MacServiceCancelResult Ieee802154StandardMac::cancel(uint64_t id)
     }
     if (superframeStartRequest && superframeStartRequest->id == id)
         return Ieee802154MacServiceCancelResult::NOT_CANCELLABLE;
-    if (beaconPreparation && *beaconPreparation == id)
+    if (beaconPreparation && beaconPreparation->id == id)
         return Ieee802154MacServiceCancelResult::NOT_CANCELLABLE;
     if (orphanResponseRequest && orphanResponseRequest->id == id && phyOperation && phyOperation->purpose == PhyPurpose::ORPHAN_CHANNEL_GET)
         return Ieee802154MacServiceCancelResult::NOT_CANCELLABLE;
@@ -733,9 +883,10 @@ void Ieee802154StandardMac::restoreIdle()
                     superframeStartRequest->phase == SuperframeStartRequest::Phase::IMMEDIATE_ACTIVATION)) ||
             interruptedSuperframeChannel || interruptedScanCcaDuration || scanRequest || beaconPreparation || orphanResponseRequest || phyOperation || !phy)
         return;
-    if (beaconResponses && !beaconScheduleActive()) {
-        --beaconResponses;
-        transmitBeacon(0,true);
+    if (!beaconResponses.empty() && !beaconScheduleActive()) {
+        auto response = std::move(beaconResponses.front());
+        beaconResponses.pop_front();
+        transmitBeacon(0,true,response);
         return;
     }
     if (autoPollPending && !pollRequest && !associationRequest && parentAssociated) {
@@ -1249,7 +1400,8 @@ void Ieee802154StandardMac::finishReset(const Ieee802154MacServiceResult& result
     if (result == Ieee802154MacServiceResult(Ieee802154MacStatus::SUCCESS)) {
         auto defaultDsn = request.defaults ? intuniform(0, 255, par("dsnRng")) : 0;
         auto defaultBsn = request.defaults && par("enableManagement").boolValue() ? intuniform(0, 255, par("dsnRng")) : 0;
-        pib->reset(request.defaults, defaultDsn, defaultBsn);
+        auto defaultEbsn = request.defaults && par("enableEnhancedFrames").boolValue() ? intuniform(0, 255, par("dsnRng")) : 0;
+        pib->reset(request.defaults, defaultDsn, defaultBsn, defaultEbsn);
         if (request.defaults) {
             panCoordinator = initialPanCoordinator;
             coordinator = initialPanCoordinator;
@@ -1301,7 +1453,7 @@ void Ieee802154StandardMac::stop()
         if (managementClient)
             managementClient->handleRxEnableConfirm(receiverId, {Ieee802154MacServiceAbortReason::STOPPED,{}});
     }
-    beaconResponses = 0;
+    beaconResponses.clear();
     pendingPanConflict.reset();
     discardAck();
     if (associationRequest)
@@ -1413,6 +1565,7 @@ void Ieee802154StandardMac::handleAvailabilityIndication(const physicallayer::Ie
     }
     bool outerRetirement = retiringRequests;
     retiringRequests = true;
+    beaconResponses.clear(); // PHY loss retires transient responses before callbacks can resume work.
     clearCfp();
     constructedGtsCandidate.reset();
     autoPollPending.reset();
@@ -2237,10 +2390,11 @@ void Ieee802154StandardMac::processReceivedPacket(Packet *packet, const physical
         return;
     bool enhanced = frame->getFrameVersion() == 2;
     if (enhanced) {
-        if (!par("enableEnhancedFrames").boolValue() || (frame->getFrameType() != 1 && frame->getFrameType() != 2) ||
+        if (!par("enableEnhancedFrames").boolValue() || frame->getFrameType() > 3 ||
                 (frame->getFrameType() == 2 && frame->getAckRequest()) || frame->getSecurityEnabled())
-            return; // Enhanced commands and security are not enabled by this stage.
-        if (frame->getSourceAddress().isNone() || frame->getDestinationAddress().isNone())
+            return; // Protected enhanced frames remain outside this profile.
+        if ((frame->getFrameType() == 1 || frame->getFrameType() == 2) &&
+                (frame->getSourceAddress().isNone() || frame->getDestinationAddress().isNone()))
             return;
     }
     if (phyOperation && phyOperation->purpose == PhyPurpose::CCA && frame->getFrameType() != 0)
@@ -2250,7 +2404,7 @@ void Ieee802154StandardMac::processReceivedPacket(Packet *packet, const physical
         if (receiveEpoch != receiveRetirementEpoch || !started || resetRequest || !client)
             return;
     }
-    if (enhanced) {
+    if (enhanced && (frame->getFrameType() == 1 || frame->getFrameType() == 2)) {
         auto destinationPan = Ieee802154FrameCodec::destinationPanField(*frame);
         auto sourcePan = Ieee802154FrameCodec::sourcePanField(*frame);
         auto localPan = uint16_t(getInteger("macPanId"));
@@ -2258,6 +2412,70 @@ void Ieee802154StandardMac::processReceivedPacket(Packet *packet, const physical
             return;
         frame->setDestinationPanId(destinationPan.value_or(localPan));
         frame->setSourcePanId(sourcePan.value_or(destinationPan.value_or(localPan)));
+    }
+    if (enhanced && frame->getFrameType() == 3) {
+        if (scanRequest) return; // A scan observes beacons, not ordinary command procedures.
+        if (!par("enableManagement").boolValue() || !coordinator || frame->getAckRequest()) return; // EBR Frame Pending is ignored on reception.
+        auto inspected = Ieee802154InformationElements::inspect(*frame);
+        auto view = std::get_if<Ieee802154InformationElements::View>(&inspected);
+        if (!view || view->data.length != 1 || frame->getPayload(view->data.offset - view->fixedMhr.length) != 7) return;
+        const auto& destination = frame->getDestinationAddress();
+        auto destinationPan = Ieee802154FrameCodec::destinationPanField(*frame);
+        if (!destination.isShort() || destination.isShortUnallocated() ||
+                (!destination.isShortBroadcast() && destination.getShort() != getInteger("macShortAddress")) ||
+                (destinationPan && *destinationPan != 0xffff && *destinationPan != getInteger("macPanId"))) return;
+        EnhancedBeaconRequestView parsed;
+        if (!inspectEnhancedBeaconRequest(*view,parsed)) return;
+        Ieee802154MacBeaconRequestIndication indication{frame->getSourceAddress(),destinationPan};
+        indication.enhanced = true; indication.destinationAddress = destination;
+        indication.sourcePanId = Ieee802154FrameCodec::sourcePanField(*frame);
+        indication.sequenceNumber = Ieee802154FrameCodec::sequenceNumber(*frame);
+        indication.filter = parsed.filter; indication.headerIes = view->headers; indication.payloadIes = view->payloads;
+        if (!getBoolean("macBeaconAutoRespond") || beaconScheduleActive()) {
+            if (managementClient) managementClient->handleBeaconRequestIndication(indication);
+            return;
+        }
+        if (parsed.filter) {
+            const auto& filter = *parsed.filter;
+            if (std::any_of(filter.requestedAttributes.begin(),filter.requestedAttributes.end(),[](uint8_t value) { return value != 0; })) return;
+            if (getBoolean("macEbFilteringEnabled")) {
+                if ((filter.permitJoining && !getBoolean("macAssociationPermit")) ||
+                        (filter.minimumLqi && quality.lqi.value_or(0) < *filter.minimumLqi) ||
+                        (filter.responsePercent && *filter.responsePercent == 0)) return;
+                if (filter.responsePercent && *filter.responsePercent < 100 && intuniform(0,99,par("dsnRng")) >= *filter.responsePercent) return;
+            }
+        }
+        Ieee802154MacBeaconRequest response{quality.channel}; response.enhanced = true;
+        auto sourceMode = getInteger("macEbAutoSa");
+        response.sourceAddressMode = sourceMode == 0 ? Ieee802154Address::AddressType::NONE :
+                sourceMode == 1 ? Ieee802154Address::AddressType::SHORT : Ieee802154Address::AddressType::EXTENDED;
+        if (sourceMode == 1 && getInteger("macShortAddress") >= 0xfffe) return;
+        if (!frame->getSourceAddress().isNone()) {
+            if (frame->getSourceAddress().isBroadcast() || frame->getSourceAddress().isExtendedGroup() || frame->getSourceAddress().isShortUnallocated()) return;
+            response.destinationAddress = frame->getSourceAddress();
+        }
+        // A response carries the requester's address and destination PAN, never Source PAN.
+        // Table 7-2 cannot encode that contract for the other short-address combinations.
+        if (sourceMode != 0 && (!response.destinationAddress || response.destinationAddress->isShort() || sourceMode == 1)) return;
+        response.headerIes = std::get<std::vector<Ieee802154InformationElements::Header>>(*pib->get("macEbHeaderIeList").value);
+        response.payloadIes = std::get<std::vector<Ieee802154InformationElements::Payload>>(*pib->get("macEbPayloadIeList").value);
+        if (!supportedBeaconIes(response.headerIes,response.payloadIes)) return;
+        for (auto id : parsed.requestedHeaders)
+            if (std::none_of(response.headerIes.begin(),response.headerIes.end(),[&](const auto& header) { return header.id == id; })) return;
+        for (auto group : parsed.requestedPayloadGroups)
+            if (std::none_of(response.payloadIes.begin(),response.payloadIes.end(),[&](const auto& payload) { return payload.group == group; })) return;
+        for (const auto& wanted : parsed.requestedNested) {
+            bool found = false;
+            for (const auto& payload : response.payloadIes) if (payload.group == 1) {
+                auto nested = Ieee802154InformationElements::inspectNested(payload);
+                if (auto elements = std::get_if<std::vector<Ieee802154InformationElements::Nested>>(&nested))
+                    found |= std::any_of(elements->begin(),elements->end(),[&](const auto& element) { return element.id == wanted.id && element.longForm == wanted.longForm; });
+            }
+            if (!found) return;
+        }
+        beaconResponses.push_back(std::move(response));
+        restoreIdle();
+        return;
     }
     std::optional<Ieee802154CommandCodec::Command> parsedCommand;
     if (frame->getFrameType() == 3 && par("enableManagement").boolValue() && !frame->getSecurityEnabled()) {
@@ -2290,9 +2508,7 @@ void Ieee802154StandardMac::processReceivedPacket(Packet *packet, const physical
             frame->getPayloadArraySize() == 1 && frame->getPayload(0) == 7 && frame->getSourceAddress().isNone() &&
             frame->getDestinationAddress().isShortBroadcast() && frame->getDestinationPanId() == 0xffff && !frame->getAckRequest()) {
         if (getBoolean("macBeaconAutoRespond") && !beaconScheduleActive()) {
-            if (beaconResponses == UINT64_MAX)
-                throw cRuntimeError("IEEE 802.15.4 beacon response counter exhausted");
-            ++beaconResponses;
+            beaconResponses.push_back(Ieee802154MacBeaconRequest{quality.channel});
             restoreIdle();
         }
         else if (managementClient)
@@ -3325,7 +3541,7 @@ void Ieee802154StandardMac::handleSetConfirm(uint64_t id, const physicallayer::I
                 finishScan(Ieee802154MacServiceAbortReason::STOPPED);
             }
         }
-        else if (scanRequest->parameters.type == Ieee802154ScanType::ACTIVE || scanRequest->parameters.type == Ieee802154ScanType::ORPHAN)
+        else if (scanRequest->parameters.type == Ieee802154ScanType::ACTIVE || scanRequest->parameters.type == Ieee802154ScanType::ENHANCED_ACTIVE_SCAN || scanRequest->parameters.type == Ieee802154ScanType::ORPHAN)
             transmitScanRequest();
         else
             requestState(PhyState::RECEIVE, PhyPurpose::SCAN_RX);
@@ -4258,9 +4474,36 @@ Ieee802154MacServiceAdmission Ieee802154StandardMac::submitScan(uint64_t id, con
     if (admission != Ieee802154MacServiceAdmission::ACCEPTED)
         return admission;
     if (!par("enableManagement").boolValue() || !managementClient || !phy ||
-            (request.type != Ieee802154ScanType::PASSIVE && request.type != Ieee802154ScanType::ED && request.type != Ieee802154ScanType::ACTIVE && request.type != Ieee802154ScanType::ORPHAN) ||
+            (request.type != Ieee802154ScanType::PASSIVE && request.type != Ieee802154ScanType::ED && request.type != Ieee802154ScanType::ACTIVE && request.type != Ieee802154ScanType::ORPHAN && request.type != Ieee802154ScanType::ENHANCED_ACTIVE_SCAN) ||
             (request.type == Ieee802154ScanType::ORPHAN && panCoordinator))
         return Ieee802154MacServiceAdmission::UNSUPPORTED_OPERATION;
+    bool enhanced = request.type == Ieee802154ScanType::ENHANCED_ACTIVE_SCAN;
+    if (enhanced && !par("enableEnhancedFrames").boolValue())
+        return Ieee802154MacServiceAdmission::UNSUPPORTED_OPERATION;
+    auto payload = enhanced ? enhancedScanPayload(request) : std::optional<std::vector<uint8_t>>();
+    if ((!enhanced && (request.sequenceSuppressed || request.panIdSuppressed || !request.headerIes.empty() || !request.payloadIes.empty() ||
+             !request.requestedHeaderIds.empty() || !request.requestedNestedIds.empty() || request.filter || request.linkQualityScan ||
+             request.destinationAddress != Ieee802154Address::SHORT_BROADCAST_ADDRESS || request.destinationPanId != 0xffff)) ||
+            (enhanced && (!payload || !request.destinationAddress.isShort() || request.destinationAddress.isShortUnallocated()))) {
+        Ieee802154MacScanConfirm confirm{request.type}; confirm.result = Ieee802154MacStatus::INVALID_PARAMETER;
+        managementClient->handleScanConfirm(id,confirm); return admission;
+    }
+    if (enhanced && request.linkQualityScan) {
+        Ieee802154MacScanConfirm confirm{request.type}; confirm.result = Ieee802154MacStatus::UNSUPPORTED_FEATURE;
+        managementClient->handleScanConfirm(id,confirm); return admission;
+    }
+    if (enhanced) {
+        if (request.panIdSuppressed) {
+            Ieee802154MacScanConfirm confirm{request.type}; confirm.result = Ieee802154MacStatus::INVALID_PARAMETER;
+            managementClient->handleScanConfirm(id,confirm); return admission;
+        }
+        auto compressed = request.destinationPanId != getInteger("macPanId");
+        auto layout = Ieee802154FrameLayout::fromControl(2,2,3,compressed,request.sequenceSuppressed);
+        if (!layout || layout->headerLength() + payload->size() + 2 > 127) {
+            Ieee802154MacScanConfirm confirm{request.type}; confirm.result = Ieee802154MacStatus::FRAME_TOO_LONG;
+            managementClient->handleScanConfirm(id,confirm); return admission;
+        }
+    }
     if (!pendingOriginals.empty() || (phyOperation && phyOperation->purpose != PhyPurpose::IDLE))
         return Ieee802154MacServiceAdmission::BUSY;
     if (phyOperation) {
@@ -4315,7 +4558,7 @@ void Ieee802154StandardMac::beginScanChannel()
 {
     if (scanRequest->index == scanRequest->parameters.channels.size()) {
         finishScan(scanRequest->parameters.type == Ieee802154ScanType::ORPHAN ||
-                (scanRequest->parameters.type == Ieee802154ScanType::ACTIVE && scanRequest->requestSent && !scanRequest->beaconFound) ?
+                ((scanRequest->parameters.type == Ieee802154ScanType::ACTIVE || scanRequest->parameters.type == Ieee802154ScanType::ENHANCED_ACTIVE_SCAN) && scanRequest->requestSent && !scanRequest->beaconFound) ?
                 Ieee802154MacStatus::NO_BEACON : Ieee802154MacStatus::SUCCESS);
         return;
     }
@@ -4405,7 +4648,7 @@ void Ieee802154StandardMac::receiveScanBeacon(const Ptr<Ieee802154Frame>& frame,
 {
     if (scanRequest->closing || !scanTimer->isScheduled() || simTime() > scanTimer->getArrivalTime() ||
             quality.timing.ppduStart < scanRequest->listeningSince || frame->getFrameType() != 0 ||
-            frame->getSourceAddress().isNone())
+            (frame->getSourceAddress().isNone() && frame->getFrameVersion() != 2))
         return;
     auto description = describeBeacon(frame,quality,anchor);
     if (!description)
@@ -4413,9 +4656,9 @@ void Ieee802154StandardMac::receiveScanBeacon(const Ptr<Ieee802154Frame>& frame,
     auto descriptor = *description;
     scanRequest->beaconFound = true;
     bool notify = !scanRequest->autoRequest || getBoolean("macNotifyAllBeacons") ||
-            (descriptor.contentAvailable && !descriptor.beacon.payload.empty());
+            (descriptor.contentAvailable && !descriptor.beacon.payload.empty()) || !descriptor.enhancedPayload.empty();
     bool limit = false;
-    if (scanRequest->autoRequest) {
+    if (scanRequest->autoRequest && descriptor.coordinatorPanId && !descriptor.coordinatorAddress.isNone()) {
         auto& list = scanRequest->confirm.panDescriptors;
         auto match = std::find_if(list.begin(),list.end(),[&](const auto& previous) {
             return previous.channel == descriptor.channel && previous.coordinatorPanId == descriptor.coordinatorPanId &&
@@ -4437,7 +4680,8 @@ std::optional<Ieee802154PanDescriptor> Ieee802154StandardMac::describeBeacon(con
         const std::optional<Ieee802154SuperframeReceptionAnchor>& anchor) const
 {
     const auto& source = frame->getSourceAddress();
-    if (frame->getFrameType() != 0 || source.isNone() || source.isBroadcast() || source.isExtendedGroup() || source.isShortUnallocated())
+    bool enhanced = frame->getFrameVersion() == 2;
+    if (frame->getFrameType() != 0 || (!enhanced && source.isNone()) || source.isBroadcast() || source.isExtendedGroup() || source.isShortUnallocated())
         return {};
     if (superframe && !anchor)
         return {}; // No first-symbol clock sample is available for this reception.
@@ -4445,7 +4689,7 @@ std::optional<Ieee802154PanDescriptor> Ieee802154StandardMac::describeBeacon(con
     for (size_t i = 0; i < payload.size(); i++)
         payload[i] = frame->getPayload(i);
     Ieee802154BeaconCodec::Content content;
-    if (!frame->getSecurityEnabled()) {
+    if (!enhanced && !frame->getSecurityEnabled()) {
         auto decoded = Ieee802154BeaconCodec::decode(payload);
         if (!std::holds_alternative<Ieee802154BeaconCodec::Content>(decoded))
             return {};
@@ -4453,9 +4697,27 @@ std::optional<Ieee802154PanDescriptor> Ieee802154StandardMac::describeBeacon(con
     }
     auto timestamp = anchor ? Ieee802154SuperframeTiming::timestamp(anchor->localStart) :
             uint32_t((quality.timing.ppduStart + SimTime(160,SIMTIME_US)).inUnit(SIMTIME_US) / 16) & 0xffffff;
-    Ieee802154PanDescriptor descriptor{frame->getSourcePanId(),frame->getSourceAddress(),
+    auto sourcePan = Ieee802154FrameCodec::sourcePanField(*frame);
+    auto effectivePan = sourcePan;
+    if (enhanced && !effectivePan)
+        effectivePan = Ieee802154FrameCodec::destinationPanField(*frame);
+    if (enhanced && !effectivePan && hasEnhancedPeerContext(getInteger("macPanId"),source))
+        effectivePan = uint16_t(getInteger("macPanId"));
+    Ieee802154PanDescriptor descriptor{effectivePan,frame->getSourceAddress(),
             quality.channel,content,quality.lqi.value_or(0),timestamp};
-    descriptor.sequenceNumber = frame->getDsn();
+    descriptor.sequenceNumber = Ieee802154FrameCodec::sequenceNumber(*frame);
+    descriptor.frameVersion = frame->getFrameVersion();
+    descriptor.sourcePanId = sourcePan;
+    if (enhanced) {
+        auto inspected = Ieee802154InformationElements::inspect(*frame);
+        auto view = std::get_if<Ieee802154InformationElements::View>(&inspected);
+        if (!view) return {};
+        descriptor.contentAvailable = false; // No legacy superframe body exists in an enhanced beacon.
+        descriptor.headerIes = view->headers;
+        descriptor.payloadIes = view->payloads;
+        auto offset = view->data.offset - view->fixedMhr.length;
+        for (size_t i = offset; i < frame->getPayloadArraySize(); ++i) descriptor.enhancedPayload.push_back(frame->getPayload(i));
+    }
     if (frame->getSecurityEnabled()) {
         descriptor.contentAvailable = false;
         descriptor.protectedBody = payload;
@@ -4484,16 +4746,38 @@ Ieee802154MacServiceAdmission Ieee802154StandardMac::submitBeacon(uint64_t id, c
         return Ieee802154MacServiceAdmission::UNSUPPORTED_OPERATION;
     if (!par("enableManagement").boolValue() || !managementClient || !phy || !access)
         return Ieee802154MacServiceAdmission::UNSUPPORTED_OPERATION;
+    if (request.enhanced && !par("enableEnhancedFrames").boolValue())
+        return Ieee802154MacServiceAdmission::UNSUPPORTED_OPERATION;
     if (phyOperation)
         return Ieee802154MacServiceAdmission::BUSY;
-    beaconPreparation = id;
-    if (request.enhanced || request.superframeOrder != 15 || request.security.securityLevel > 7) {
+    beaconPreparation = BeaconPreparation{id,request};
+    if (request.superframeOrder != 15 || request.security.securityLevel > 7 ||
+            (!request.enhanced && (request.sourceAddressMode || request.destinationAddress || request.sequenceSuppressed || request.panIdSuppressed ||
+                    !request.headerIes.empty() || !request.payloadIes.empty() || !request.requestedHeaderIds.empty() || !request.requestedNestedIds.empty())) ||
+            (request.enhanced && (!supportedBeaconIes(request.headerIes,request.payloadIes) ||
+                    !request.requestedHeaderIds.empty() || !request.requestedNestedIds.empty() ||
+                    (request.sourceAddressMode && *request.sourceAddressMode != Ieee802154Address::AddressType::NONE &&
+                     *request.sourceAddressMode != Ieee802154Address::AddressType::SHORT && *request.sourceAddressMode != Ieee802154Address::AddressType::EXTENDED) ||
+                    (request.sourceAddressMode && *request.sourceAddressMode == Ieee802154Address::AddressType::SHORT && getInteger("macShortAddress") >= 0xfffe)))) {
         completeBeaconPreparation(Ieee802154MacStatus::INVALID_PARAMETER);
         return admission;
     }
     if (request.security.securityLevel != 0) {
         completeBeaconPreparation(Ieee802154MacStatus::UNSUPPORTED_SECURITY);
         return admission;
+    }
+    if (request.enhanced) {
+        auto sourceMode = request.sourceAddressMode.value_or(Ieee802154Address::AddressType::EXTENDED);
+        auto destination = request.destinationAddress.value_or(Ieee802154Address::SHORT_BROADCAST_ADDRESS);
+        auto mode = [](const Ieee802154Address& address) { return address.isNone() ? 0 : address.isShort() ? 2 : 3; };
+        auto source = sourceMode == Ieee802154Address::AddressType::NONE ? 0 : sourceMode == Ieee802154Address::AddressType::SHORT ? 2 : 3;
+        auto layout = Ieee802154FrameLayout::fromControl(2,mode(destination),source,request.panIdSuppressed,request.sequenceSuppressed);
+        if (!layout || destination.isShortUnallocated() ||
+                (request.panIdSuppressed && (layout->destinationPanPresent || layout->sourcePanPresent)) ||
+                (source == 3 && destination.isExtended() && request.panIdSuppressed && !hasEnhancedPeerContext(getInteger("macPanId"),destination))) {
+            completeBeaconPreparation(Ieee802154MacStatus::INVALID_PARAMETER);
+            return admission;
+        }
     }
     auto internalId = allocatePhyId();
     phyOperation = PhyOperation{internalId,PhyPurpose::BEACON_CHANNEL};
@@ -4507,17 +4791,17 @@ Ieee802154MacServiceAdmission Ieee802154StandardMac::submitBeacon(uint64_t id, c
 
 void Ieee802154StandardMac::completeBeaconPreparation(const Ieee802154MacServiceResult& result)
 {
-    auto id = *beaconPreparation;
+    auto completed = *beaconPreparation;
     beaconPreparation.reset();
     if (result == Ieee802154MacServiceResult(Ieee802154MacStatus::SUCCESS))
-        transmitBeacon(id,false);
+        transmitBeacon(completed.id,false,completed.request);
     else if (managementClient)
-        managementClient->handleBeaconConfirm(id,{result});
+        managementClient->handleBeaconConfirm(completed.id,{result});
 }
 
-void Ieee802154StandardMac::transmitBeacon(uint64_t id, bool automatic)
+void Ieee802154StandardMac::transmitBeacon(uint64_t id, bool automatic, const Ieee802154MacBeaconRequest& request)
 {
-    auto frame = makeBeacon(getInteger("macPanId"),15,15,false);
+    auto frame = request.enhanced ? makeEnhancedBeacon(request) : makeBeacon(getInteger("macPanId"),15,15,false);
     if (!frame) {
         if (!automatic && managementClient)
             managementClient->handleBeaconConfirm(id,{Ieee802154MacStatus::FRAME_TOO_LONG});
@@ -4526,6 +4810,35 @@ void Ieee802154StandardMac::transmitBeacon(uint64_t id, bool automatic)
     transaction = Transaction{id,nullptr,0,frame};
     transaction->kind = automatic ? Transaction::Kind::AUTO_BEACON : Transaction::Kind::BEACON;
     startData();
+}
+
+Ptr<Ieee802154Frame> Ieee802154StandardMac::makeEnhancedBeacon(const Ieee802154MacBeaconRequest& request)
+{
+    auto frame = makeShared<Ieee802154Frame>();
+    frame->setFrameType(0); frame->setFrameVersion(2);
+    frame->setSequenceSuppressed(request.sequenceSuppressed);
+    frame->setDsn(getInteger("macEbsn"));
+    auto mode = request.sourceAddressMode.value_or(Ieee802154Address::AddressType::EXTENDED);
+    if (mode == Ieee802154Address::AddressType::SHORT)
+        frame->setSourceAddress(Ieee802154Address::fromShort(getInteger("macShortAddress")));
+    else if (mode == Ieee802154Address::AddressType::EXTENDED)
+        frame->setSourceAddress(std::get<Ieee802154Address>(*pib->get("macExtendedAddress").value));
+    frame->setDestinationAddress(request.destinationAddress.value_or(Ieee802154Address::SHORT_BROADCAST_ADDRESS));
+    frame->setSourcePanId(getInteger("macPanId")); frame->setDestinationPanId(getInteger("macPanId"));
+    frame->setFramePending(pending->count(getInteger("macPanId"),Ieee802154Address::fromShort(0xffff),simTime()) != 0);
+    frame->setPanCompression(request.panIdSuppressed);
+    auto modeOf = [](const Ieee802154Address& address) { return address.isNone() ? 0 : address.isShort() ? 2 : 3; };
+    auto layout = Ieee802154FrameLayout::fromControl(2,modeOf(frame->getDestinationAddress()),modeOf(frame->getSourceAddress()),request.panIdSuppressed,request.sequenceSuppressed);
+    if (!layout || (request.panIdSuppressed && (layout->sourcePanPresent || layout->destinationPanPresent))) return nullptr;
+    auto bytes = Ieee802154InformationElements::encode(request.headerIes,request.payloadIes,
+            std::get<std::vector<uint8_t>>(*pib->get("macBeaconPayload").value));
+    if (layout->headerLength() + bytes.size() + 2 > 127) return nullptr;
+    frame->setInformationElementsPresent(!request.headerIes.empty() || !request.payloadIes.empty());
+    frame->setPayloadArraySize(bytes.size());
+    for (size_t i = 0; i < bytes.size(); ++i) frame->setPayload(i,bytes[i]);
+    Ieee802154FrameCodec::finalize(*frame);
+    if (!request.sequenceSuppressed) pib->set("macEbsn",uint64_t((frame->getDsn() + 1) & 255));
+    return frame;
 }
 
 bool Ieee802154StandardMac::overlapsIncomingSuperframe(clocktime_t target, uint8_t beaconOrder,
@@ -4655,20 +4968,29 @@ void Ieee802154StandardMac::transmitScanRequest()
 {
     auto frame = makeShared<Ieee802154Frame>();
     frame->setFrameType(3);
-    frame->setFrameVersion(1);
+    bool enhanced = scanRequest->parameters.type == Ieee802154ScanType::ENHANCED_ACTIVE_SCAN;
+    frame->setFrameVersion(enhanced ? 2 : 1);
+    frame->setSequenceSuppressed(enhanced && scanRequest->parameters.sequenceSuppressed);
     frame->setDsn(getInteger("macDsn"));
-    frame->setDestinationAddress(Ieee802154Address::SHORT_BROADCAST_ADDRESS);
-    frame->setDestinationPanId(0xffff);
+    frame->setDestinationAddress(enhanced ? scanRequest->parameters.destinationAddress : Ieee802154Address::SHORT_BROADCAST_ADDRESS);
+    frame->setDestinationPanId(enhanced ? scanRequest->parameters.destinationPanId : 0xffff);
+    if (enhanced) {
+        frame->setSourceAddress(std::get<Ieee802154Address>(*pib->get("macExtendedAddress").value));
+        frame->setSourcePanId(getInteger("macPanId"));
+        frame->setPanCompression(scanRequest->parameters.destinationPanId != getInteger("macPanId"));
+    }
     bool orphan = scanRequest->parameters.type == Ieee802154ScanType::ORPHAN;
     if (orphan) {
         frame->setSourceAddress(std::get<Ieee802154Address>(*pib->get("macExtendedAddress").value));
         frame->setSourcePanId(0xffff);
         frame->setPanCompression(true);
     }
-    frame->setPayloadArraySize(1);
-    frame->setPayload(0,orphan ? 6 : 7);
+    auto bytes = enhanced ? *enhancedScanPayload(scanRequest->parameters) : std::vector<uint8_t>{uint8_t(orphan ? 6 : 7)};
+    frame->setInformationElementsPresent(enhanced && bytes.size() > 1);
+    frame->setPayloadArraySize(bytes.size());
+    for (size_t i = 0; i < bytes.size(); ++i) frame->setPayload(i,bytes[i]);
     Ieee802154FrameCodec::finalize(*frame);
-    pib->set("macDsn",uint64_t((frame->getDsn() + 1) & 255));
+    if (!frame->getSequenceSuppressed()) pib->set("macDsn",uint64_t((frame->getDsn() + 1) & 255));
     transaction = Transaction{scanRequest->id,nullptr,0,frame};
     transaction->kind = Transaction::Kind::SCAN_REQUEST;
     startData();
@@ -5146,9 +5468,33 @@ bool Ieee802154StandardMac::receiveManagedBeacon(const Ptr<Ieee802154Frame>& fra
 {
     if (frame->getFrameType() != 0)
         return false;
+    if (frame->getFrameVersion() == 2) {
+        auto pan = uint16_t(getInteger("macPanId"));
+        auto sourcePan = Ieee802154FrameCodec::sourcePanField(*frame);
+        auto destinationPan = Ieee802154FrameCodec::destinationPanField(*frame);
+        const auto& destination = frame->getDestinationAddress();
+        bool addressMatches = destination.isNone() || destination.isBroadcast() ||
+                destination == std::get<Ieee802154Address>(*pib->get("macExtendedAddress").value) ||
+                (destination.isShort() && !destination.isShortUnallocated() && destination.getShort() == getInteger("macShortAddress")) ||
+                (destination.isExtendedGroup() && getBoolean("macGroupRxMode"));
+        if (!addressMatches || (destinationPan && *destinationPan != pan && *destinationPan != 0xffff) ||
+                (sourcePan && pan != 0xffff && *sourcePan != pan))
+            return true;
+    }
     auto descriptor = describeBeacon(frame,quality,anchor);
     if (!descriptor)
         return true;
+    if (descriptor->frameVersion == 2) {
+        if (descriptor->coordinatorPanId && isAssociatedCoordinator(*descriptor->coordinatorPanId,descriptor->coordinatorAddress)) {
+            broadcastReceivePending = frame->getFramePending();
+            restoreIdle();
+            if (receiveEpoch != receiveRetirementEpoch || !started || resetRequest)
+                return true;
+        }
+        if (started && managementClient && (!getBoolean("macAutoRequest") || getBoolean("macNotifyAllBeacons") || !descriptor->enhancedPayload.empty()))
+            managementClient->handleBeaconNotifyIndication(*descriptor);
+        return true; // Enhanced discovery cannot renew a legacy tracking/superframe epoch.
+    }
     bool foreignSyncBeacon = synchronization && synchronization->installed && !matchesSyncCoordinator(*descriptor);
     bool located = renewSynchronization(*descriptor,anchor,quality.timing.ppduEnd);
     bool awaitingCapRetry = transaction && transaction->transmittedInCap && transaction->phase == Phase::WAIT_CAP && !synchronization;
@@ -5212,7 +5558,7 @@ bool Ieee802154StandardMac::receiveManagedBeacon(const Ptr<Ieee802154Frame>& fra
         if (geometry && geometry->beaconInterval) {
             incomingSuperframe = IncomingSuperframe{anchor->localStart,geometry->beaconOrder,geometry->superframeOrder,
                     anchor->physicalStart,quality.timing.ppduEnd,(specification & 0x4000) != 0,
-                    descriptor->coordinatorPanId,descriptor->coordinatorAddress,descriptor->channel};
+                    *descriptor->coordinatorPanId,descriptor->coordinatorAddress,descriptor->channel};
             if (superframeStartRequest && superframeStartRequest->awaitingFirstBoundary && superframeStartRequest->firstTarget &&
                     *superframeStartRequest->firstTarget > superframe->getCurrentClockTime()) {
                 auto request = superframeStartRequest->parameters;
@@ -5246,7 +5592,7 @@ bool Ieee802154StandardMac::receiveManagedBeacon(const Ptr<Ieee802154Frame>& fra
                         outgoingEpoch->superframeOrder,candidate->getChunkLength());
                 if (overlap) {
                     auto channel = descriptor->channel;
-                    auto pan = descriptor->coordinatorPanId;
+                    auto pan = *descriptor->coordinatorPanId;
                     auto address = descriptor->coordinatorAddress;
                     retirePeriodicBeaconing(Ieee802154MacServiceAbortReason::STOPPED);
                     if (receiveEpoch != receiveRetirementEpoch)
@@ -5284,7 +5630,7 @@ bool Ieee802154StandardMac::receiveManagedBeacon(const Ptr<Ieee802154Frame>& fra
         pollRequest->association = true;
         startPoll();
     }
-    if (descriptor->contentAvailable && isAssociatedCoordinator(descriptor->coordinatorPanId,descriptor->coordinatorAddress)) {
+    if (descriptor->contentAvailable && descriptor->coordinatorPanId && isAssociatedCoordinator(*descriptor->coordinatorPanId,descriptor->coordinatorAddress)) {
         broadcastReceivePending = frame->getFramePending();
         const auto& addresses = descriptor->beacon.pendingAddresses;
         auto shortAddress = Ieee802154Address::fromShort(getInteger("macShortAddress"));
@@ -5304,12 +5650,12 @@ bool Ieee802154StandardMac::receiveManagedBeacon(const Ptr<Ieee802154Frame>& fra
             descriptor->coordinatorPanId == getInteger("macPanId");
     auto coordinator = std::get<Ieee802154Address>(*pib->get("macCoordExtendedAddress").value);
     if (conflict && panCoordinator && managementClient)
-        managementClient->handleSyncLossIndication({Ieee802154SyncLossReason::PAN_ID_CONFLICT,descriptor->coordinatorPanId,
+        managementClient->handleSyncLossIndication({Ieee802154SyncLossReason::PAN_ID_CONFLICT,*descriptor->coordinatorPanId,
                 descriptor->channel,std::get<Ieee802154Address>(*pib->get("macExtendedAddress").value),{},{}});
     else if (conflict && !panCoordinator && parentAssociated && getBoolean("macAssociatedPanCoord") && coordinator.isExtended() &&
             descriptor->coordinatorAddress != coordinator && descriptor->coordinatorAddress !=
             Ieee802154Address::fromShort(getInteger("macCoordShortAddress")) && !pendingPanConflict) {
-        pendingPanConflict = PanConflict{descriptor->coordinatorPanId,coordinator,descriptor->channel};
+        pendingPanConflict = PanConflict{*descriptor->coordinatorPanId,coordinator,descriptor->channel};
         restoreIdle();
     }
     if (receiveEpoch != receiveRetirementEpoch)

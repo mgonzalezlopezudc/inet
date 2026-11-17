@@ -45,6 +45,13 @@ Ieee802154MacStatus Ieee802154MacPib::getValue(const State& state, const std::st
     GET_INTEGER(macPanId)
     GET_INTEGER(macDsn)
     GET_INTEGER(macBsn)
+    if (state.enhancedSupported) {
+        GET_INTEGER(macEbsn)
+        GET_INTEGER(macEbAutoSa)
+        GET_BOOLEAN(macEbFilteringEnabled)
+        if (attribute == "macEbHeaderIeList") { value = state.macEbHeaderIeList; return Ieee802154MacStatus::SUCCESS; }
+        if (attribute == "macEbPayloadIeList") { value = state.macEbPayloadIeList; return Ieee802154MacStatus::SUCCESS; }
+    }
     GET_BOOLEAN(macAutoRequest)
     GET_BOOLEAN(macNotifyAllBeacons)
     GET_BOOLEAN(macBeaconAutoRespond)
@@ -164,11 +171,43 @@ Ieee802154MacStatus Ieee802154MacPib::setValue(State& state, const std::string& 
         else state.macPanId = static_cast<uint16_t>(integerValue);
         return Ieee802154MacStatus::SUCCESS;
     }
-    if (attribute == "macDsn" || attribute == "macBsn") {
+    if (attribute == "macDsn" || attribute == "macBsn" || attribute == "macEbsn") {
         if (!getNonnegativeInteger(value, integerValue) || integerValue > 0xff)
             return Ieee802154MacStatus::INVALID_PARAMETER;
         if (attribute == "macDsn") state.macDsn = static_cast<uint8_t>(integerValue);
-        else state.macBsn = static_cast<uint8_t>(integerValue);
+        else if (attribute == "macBsn") state.macBsn = static_cast<uint8_t>(integerValue);
+        else state.macEbsn = static_cast<uint8_t>(integerValue);
+        return Ieee802154MacStatus::SUCCESS;
+    }
+    if (attribute == "macEbAutoSa") {
+        if (!getNonnegativeInteger(value,integerValue) || integerValue > 2)
+            return Ieee802154MacStatus::INVALID_PARAMETER;
+        state.macEbAutoSa = integerValue;
+        return Ieee802154MacStatus::SUCCESS;
+    }
+    if (attribute == "macEbFilteringEnabled") {
+        auto enabled = std::get_if<bool>(&value);
+        if (!enabled) return Ieee802154MacStatus::INVALID_PARAMETER;
+        state.macEbFilteringEnabled = *enabled;
+        return Ieee802154MacStatus::SUCCESS;
+    }
+    if (attribute == "macEbHeaderIeList") {
+        auto headers = std::get_if<std::vector<Ieee802154InformationElements::Header>>(&value);
+        if (!headers) return Ieee802154MacStatus::INVALID_PARAMETER;
+        for (const auto& header : *headers)
+            if (header.id >= 0x7e || header.content.size() > 127) return Ieee802154MacStatus::INVALID_PARAMETER;
+        state.macEbHeaderIeList = *headers;
+        return Ieee802154MacStatus::SUCCESS;
+    }
+    if (attribute == "macEbPayloadIeList") {
+        auto payloads = std::get_if<std::vector<Ieee802154InformationElements::Payload>>(&value);
+        if (!payloads) return Ieee802154MacStatus::INVALID_PARAMETER;
+        for (const auto& payload : *payloads) {
+            if (payload.group >= 15 || payload.content.size() > 2047) return Ieee802154MacStatus::INVALID_PARAMETER;
+            if (payload.group == 1 && !std::holds_alternative<std::vector<Ieee802154InformationElements::Nested>>(Ieee802154InformationElements::inspectNested(payload)))
+                return Ieee802154MacStatus::INVALID_PARAMETER;
+        }
+        state.macEbPayloadIeList = *payloads;
         return Ieee802154MacStatus::SUCCESS;
     }
     if (attribute == "macResponseWaitTime" || attribute == "macTransactionPersistenceTime") {
@@ -271,12 +310,15 @@ Ieee802154MacStatus Ieee802154MacPib::setValue(State& state, const std::string& 
 }
 
 Ieee802154MacPib::Ieee802154MacPib(Ieee802154Address deviceExtendedAddress, uint8_t injectedDsn,
-        uint32_t ccaDurationUs, const std::vector<Ieee802154MacSetRequest>& startupOverrides, uint8_t injectedBsn, bool superframeEnabled) :
+        uint32_t ccaDurationUs, const std::vector<Ieee802154MacSetRequest>& startupOverrides, uint8_t injectedBsn, bool superframeEnabled,
+        bool enhancedEnabled, uint8_t injectedEbsn) :
     state(makeDefaultState(deviceExtendedAddress, injectedDsn, ccaDurationUs, injectedBsn)),
     ccaDurationUs(ccaDurationUs)
 {
     state.macSyncSymbolOffset = superframeEnabled ? 10 : 0;
     state.gtsSupported = superframeEnabled;
+    state.enhancedSupported = enhancedEnabled;
+    state.macEbsn = injectedEbsn;
     if (!isIndividualExtendedAddress(deviceExtendedAddress))
         throw cRuntimeError("macExtendedAddress must be an individual extended address");
 
@@ -312,14 +354,17 @@ Ieee802154MacStatus Ieee802154MacPib::set(const std::string& attribute, const Ie
     return status;
 }
 
-void Ieee802154MacPib::reset(bool setDefaultPib, uint8_t injectedDsn, uint8_t injectedBsn)
+void Ieee802154MacPib::reset(bool setDefaultPib, uint8_t injectedDsn, uint8_t injectedBsn, uint8_t injectedEbsn)
 {
     if (setDefaultPib) {
         auto syncSymbolOffset = state.macSyncSymbolOffset;
         auto gtsSupported = state.gtsSupported;
+        auto enhancedSupported = state.enhancedSupported;
         state = makeDefaultState(state.macExtendedAddress, injectedDsn, ccaDurationUs, injectedBsn);
         state.macSyncSymbolOffset = syncSymbolOffset;
         state.gtsSupported = gtsSupported;
+        state.enhancedSupported = enhancedSupported;
+        state.macEbsn = injectedEbsn;
     }
 }
 

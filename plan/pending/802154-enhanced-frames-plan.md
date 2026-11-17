@@ -194,19 +194,66 @@ Depends on E1-05. Enable one-shot enhanced beacon generation and Enhanced Beacon
 
 Extend `Ieee802154MacScanRequest.h` with an explicit legacy-default beacon-request format and the requested IE/filter values mapped by E1-00 to the standard scan service. Active enhanced scanning then emits a version-2 Beacon Request through the same production scan path; it is not a fixture-only injection API. Extend the managed application's discovery policy and example in this commit so a user can run the request/response without test-library code.
 
+**Write unit test:** `tests/unit/Ieee802154EnhancedPib_1.test` for enabled/disabled profile
+availability, typed IE value-copy lifetime, valid/invalid writes and default/nondefault reset.
+Actual EBSN RNG consumption and RF counter interleaving remain protocol obligations below.
+
 **Write protocol tests:** `tests/protocol/ieee802154/Ieee802154EnhancedBeacon.test`. A requester sends EBRs with no filter, matching/nonmatching filter and supported/unknown requested IE IDs to a coordinator. Exercise automatic and upper-directed response, short/extended identities, specific/broadcast PAN, bad FCS/IE boundaries, protected unsupported input and oversized generated response. Observe the real command version/AR, the actual enhanced-beacon IE lists, native indication and scan descriptor; require no legacy four-byte beacon-body prefix, no forbidden response on filter mismatch and one terminal on failed generation. Also exercise a native enhanced scan/request service through the production path, not an observer decoding a hand-built packet. Parent has the enhanced flag but rejects it; this path must now produce the wire response and descriptor.
 
 Interleave legacy and enhanced beacons with DATA/commands while setting DSN, BSN and EBSN near rollover. Assert the separate counter changes, byte-carried sequence values, reset retention/redraw behavior and the audited no-sequence-field cases. Existing legacy-only seeded controls must not consume an added EBSN random draw.
 
-**Write reviewer document:** `tests/protocol/ieee802154/enhanced-beacon.md`, E1-06. Include EBR/filter/response and AutoRespond-false sequences. Verify the new selector plus existing Discovery/PassiveScan/Broadcast/PanConflict controls. This completes E1 core; reception of these discovery beacons does not establish periodic scheduling or TSCH joining.
+**Write reviewer document:** `tests/protocol/ieee802154/enhanced-beacon.md`, E1-06. Include EBR/filter/response and AutoRespond-false sequences. Verify the new selector plus existing `Ieee802154Discovery_1.test`/`Ieee802154PassiveScan_1.test` module controls and Broadcast/PanConflict protocol controls. This completes E1 core; reception of these discovery beacons does not establish periodic scheduling or TSCH joining.
 
 ### E1-07 — `ieee802154: add: scheduled enhanced beacon integration`
 
 Depends on E1-06 and completed B1/B2/B3. Add typed simplified superframe/GTS IE views/producers under their protocol owners. Feed B1's existing epoch/window controller and B3's grants from the normalized received information; generate outgoing IE content from the same PIB/schedule/allocation owners. Select legacy versus enhanced periodic beacons explicitly and retain the configured timestamp boundary. Add no parallel schedule or GTS database. Keep E1 core independently releasable; do not introduce a partial E1-07 whose GTS imports or fixtures depend on an absent B3 implementation.
 
+Add the stateless `Ieee802154EnhancedSuperframeCodec.h/.cc` under the existing protocol
+directory, with typed Header0x23/0x24 values. This is one new native translation unit.
+Add `tests/unit/Ieee802154EnhancedSuperframeWire_1.test` for independent octets, lengths,
+reserved-field handling and independent0–7 live/advertised counts. A copied optional enhanced
+schedule on the PAN descriptor exposes actual IE values; legacy body/pending-address content
+remains unavailable. A transient normalized view supplies shared consumers rather than a
+second state owner. Expose `macUseEnhancedBeacon` only with its actual enhanced/superframe
+consumers, preserve its false default and default/nondefault reset, and use the existing
+immutable constructed-beacon boundary for live format changes. Verify false→true→false with
+live grants and actual size/capacity/rollback; no pending selector store is needed.
+
+Operational schedule IEs are generated only by the periodic boundary owner. Under10.19/
+Table10-98 (PDF351–352), a conventional Beacon-PAN EBR response uses slotted CSMA in the next
+CAP; it is not a no-CSMA boundary beacon. The16-bit IE Timestamp supplies no standardized
+phase offset. One-shot/CAP responses therefore do not generate operational23/24 in this
+profile: explicit one-shot copies/requests are INVALID_PARAMETER, automatic requested-output
+combinations are unsupported without an empty substitute, and AutoRespond=false retains the
+actual request. Do not claim a later periodic beacon implements that CAP response rule.
+
+Retain the periodic builder's DestinationNONE wire shape as a selected profile discriminator;
+addressed EBR responses copy their requester and anonymous responses retain broadcast
+fallback. Normalize schedules only from valid unsecured periodic shape/geometry plus existing
+PAN/channel/coordinator and acquisition/tracking-window predicates. Header24 alone or an
+addressed discovery response cannot renew phase, CAP bounds, grants, aging or loss counters.
+Test a matching-parent directed CAP response carrying schedule IEs between boundaries:
+notification may occur, but scheduled state must remain unchanged, followed by actual
+periodic renewal. No internal transmission-kind tag, clock mapping or new timer is added.
+
 **Write protocol tests:** `tests/protocol/ieee802154/Ieee802154EnhancedSuperframe.test`. Repeat actual synchronization, CAP DATA and both GTS directions with enhanced beacons, loss/reacquisition, descriptor changes and one foreign/unknown IE. Compare the required schedule with the legacy-beacon profile, while allowing the longer beacon to change actual CAP start and frame-fit decisions. Require real IE-derived schedule/grants, no legacy-body interpretation, correct ACK behavior and no scheduled state update from malformed/protected-unsupported content. Parent E1 core has only one-shot discovery, and the B1/B3 branch knows legacy beacon content; this integration supplies the missing semantic bridge.
 
 Extend `Ieee802154EnhancedAck.test` in this commit with the scheduled cases deferred by E1-05: variable-length ACKs and optional-IE omission at CAP/GTS boundaries, permitted later CAP response starts, lost ACK timeout/retry deferral and no receive duty extending into another reservation. Run its selector alongside EnhancedSuperframe and document these cases in `enhanced-superframe.md`. Both CAP and GTS cases are required by this commit's acceptance gate.
+
+For GTS/ATI admission,6.6.4 (physical PDF74) uses DATA+AIFS+minimum appropriate ACK+SIFS,
+with its applicable guard. Optional response content must yield when only the mandatory ACK
+fits. Keep the conservative unknown-ACK-length receive allowance for unconstrained operation,
+but clip scheduled waiting/duty to the reservation's completion allowance. Separate this fit
+proof from6.3.1's frame-size-dependent delay before the same device's next transmission:
+retaining a later LIFS eligibility must not lengthen the current grant. Add a causal legacy
+control in `Ieee802154GtsData.test` before changing that shared calculation: at SO1, one slot
+is1920us, and a23-byte acknowledged legacy PSDU needs1664us through final SIFS, whereas
+substituting LIFS gives2112us. These are zero-propagation, unguarded base durations: the
+selected model adds2×maxPropagationDelay separately from6.6.5's beacon-elapsed drift/quantization
+guard; the positive fit requires those allowances together not to exceed256us.
+Verify the actual encoded length, RF exchange, applicable guard
+and subsequent LIFS eligibility; add final-SIFS equality and one tick either side. A reproduced
+failure requires the bounded shared fit correction in this unit, preserving global IFS policy.
 
 **Write reviewer document:** `tests/protocol/ieee802154/enhanced-superframe.md`, E1-07. Include shared schedule ownership and variable beacon-length timelines. Verify the new selector, B1–B3's applicable scheduled cases and the legacy controls. If B3 has not landed, leave E1-07 unstarted and all scheduled integration claims NOT_RUN.
 

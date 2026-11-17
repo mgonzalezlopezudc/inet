@@ -19,7 +19,7 @@ void Ieee802154ManagementApp::initialize()
     gtsOperation = par("gtsOperation");
     if (par("panId").intValue() < 0 || par("panId").intValue() >= 65535 ||
             par("channelNumber").intValue() < 11 || par("channelNumber").intValue() > 26 || par("cycles").intValue() < 1 ||
-            (gtsOperation && !beaconOperation) || par("gtsBatchSize").intValue() < 1 || SimTime(par("gtsBatchDelay")) <= SIMTIME_ZERO)
+            (gtsOperation && !beaconOperation) || (beaconOperation && par("enhancedDiscovery").boolValue()) || par("gtsBatchSize").intValue() < 1 || SimTime(par("gtsBatchDelay")) <= SIMTIME_ZERO)
         throw cRuntimeError("Invalid management example PAN/channel/cycle configuration");
     actionTimer = new cMessage("actionTimer");
     action = coordinator ? Action::START : Action::RESET;
@@ -75,7 +75,7 @@ void Ieee802154ManagementApp::handleMessage(cMessage *message)
         accepted(service->submitReset(allocateId(),{true}));
     }
     else if (action == Action::POLL)
-        accepted(management->submitPoll(allocateId(),{selectedPan->coordinatorPanId,selectedPan->coordinatorAddress}));
+        accepted(management->submitPoll(allocateId(),{*selectedPan->coordinatorPanId,selectedPan->coordinatorAddress}));
     else if (action == Action::GTS_REQUEST)
         requestGts(pendingGtsDirection);
     else {
@@ -94,7 +94,7 @@ void Ieee802154ManagementApp::handleResetConfirm(uint64_t, const Ieee802154MacRe
     set("macMinBe",uint64_t(0));
     set("macResponseWaitTime",uint64_t(beaconOperation ? 32 : 2));
     Ieee802154MacScanRequest request;
-    request.type = beaconOperation ? Ieee802154ScanType::PASSIVE : Ieee802154ScanType::ACTIVE;
+    request.type = beaconOperation ? Ieee802154ScanType::PASSIVE : par("enhancedDiscovery").boolValue() ? Ieee802154ScanType::ENHANCED_ACTIVE_SCAN : Ieee802154ScanType::ACTIVE;
     auto first = channel(); first.channel = 11;
     request.channels = {first,channel()};
     request.duration = beaconOperation ? 8640 : 256;
@@ -120,7 +120,8 @@ void Ieee802154ManagementApp::handleScanConfirm(uint64_t, const Ieee802154MacSca
 {
     Enter_Method("handleScanConfirm"); succeeded(confirm.result);
     for (const auto& descriptor : confirm.panDescriptors)
-        if (descriptor.coordinatorPanId == par("panId").intValue() && descriptor.contentAvailable &&
+        if (descriptor.coordinatorPanId == par("panId").intValue() && (descriptor.contentAvailable || (par("enhancedDiscovery").boolValue() && descriptor.frameVersion == 2)) &&
+                !descriptor.coordinatorAddress.isNone() &&
                 descriptor.securityStatus == Ieee802154MacServiceResult(Ieee802154MacStatus::SUCCESS)) {
             selectedPan = descriptor;
             break;
@@ -131,7 +132,7 @@ void Ieee802154ManagementApp::handleScanConfirm(uint64_t, const Ieee802154MacSca
         auto bo = selectedPan->beacon.superframeSpecification & 15;
         if (bo == 15)
             throw cRuntimeError("Beacon operation requires a periodic coordinator");
-        set("macPanId",uint64_t(selectedPan->coordinatorPanId));
+        set("macPanId",uint64_t(*selectedPan->coordinatorPanId));
         if (selectedPan->coordinatorAddress.isShort())
             set("macCoordShortAddress",uint64_t(selectedPan->coordinatorAddress.getShort()));
         else
@@ -147,8 +148,9 @@ void Ieee802154ManagementApp::handleScanConfirm(uint64_t, const Ieee802154MacSca
 
 void Ieee802154ManagementApp::associateSelectedPan()
 {
-    Ieee802154MacAssociateRequest request{selectedPan->channel,selectedPan->coordinatorPanId,selectedPan->coordinatorAddress};
-    request.coordinatorIsPanCoordinator = (selectedPan->beacon.superframeSpecification & 0x4000) != 0;
+    Ieee802154MacAssociateRequest request{selectedPan->channel,*selectedPan->coordinatorPanId,selectedPan->coordinatorAddress};
+    request.coordinatorIsPanCoordinator = selectedPan->frameVersion == 2 ? par("enhancedCoordinatorIsPanCoordinator").boolValue() :
+            (selectedPan->beacon.superframeSpecification & 0x4000) != 0;
     accepted(management->submitAssociate(allocateId(),request));
 }
 
@@ -198,7 +200,7 @@ void Ieee802154ManagementApp::handleAssociateConfirm(uint64_t, const Ieee802154M
     if (gtsOperation)
         requestGts(Ieee802154GtsDirection::DEVICE_TRANSMIT);
     else
-        sendData(selectedPan->coordinatorAddress,selectedPan->coordinatorPanId,false);
+        sendData(selectedPan->coordinatorAddress,*selectedPan->coordinatorPanId,false);
 }
 
 void Ieee802154ManagementApp::handleDataConfirm(uint64_t, const Ieee802154MacDataConfirm& confirm)
@@ -216,13 +218,13 @@ void Ieee802154ManagementApp::handleDataIndication(Packet *packet, const Ieee802
     if (coordinator)
         sendData(indication.sourceAddress,indication.effectiveSourcePanId.value(),!gtsOperation);
     else if (gtsOperation)
-        accepted(management->submitDisassociate(allocateId(),{selectedPan->coordinatorPanId,selectedPan->coordinatorAddress,2,false}));
+        accepted(management->submitDisassociate(allocateId(),{*selectedPan->coordinatorPanId,selectedPan->coordinatorAddress,2,false}));
 }
 
 void Ieee802154ManagementApp::handlePollConfirm(uint64_t, const Ieee802154MacPollConfirm& confirm)
 {
     Enter_Method("handlePollConfirm"); succeeded(confirm.result);
-    accepted(management->submitDisassociate(allocateId(),{selectedPan->coordinatorPanId,selectedPan->coordinatorAddress,2,false}));
+    accepted(management->submitDisassociate(allocateId(),{*selectedPan->coordinatorPanId,selectedPan->coordinatorAddress,2,false}));
 }
 
 void Ieee802154ManagementApp::handleDisassociateConfirm(uint64_t, const Ieee802154MacDisassociateConfirm& confirm)
@@ -280,7 +282,7 @@ void Ieee802154ManagementApp::handleGtsConfirm(uint64_t, const Ieee802154MacGtsC
     else if (confirm.characteristics.direction == Ieee802154GtsDirection::DEVICE_TRANSMIT)
         requestGts(Ieee802154GtsDirection::DEVICE_RECEIVE);
     else
-        sendData(selectedPan->coordinatorAddress,selectedPan->coordinatorPanId,false);
+        sendData(selectedPan->coordinatorAddress,*selectedPan->coordinatorPanId,false);
 }
 
 void Ieee802154ManagementApp::handleGtsIndication(const Ieee802154MacGtsIndication& indication)

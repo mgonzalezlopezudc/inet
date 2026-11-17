@@ -30,6 +30,12 @@ class INET_API Ieee802154MacPib
         uint16_t macPanId = 0xffff;
         uint8_t macDsn = 0;
         uint8_t macBsn = 0; ///< Deterministic helper injection; randomized by the operational owner.
+        bool enhancedSupported = false;
+        uint8_t macEbsn = 0;
+        uint8_t macEbAutoSa = 2; // FULL, as selected by Table 8-39.
+        bool macEbFilteringEnabled = true;
+        std::vector<Ieee802154InformationElements::Header> macEbHeaderIeList;
+        std::vector<Ieee802154InformationElements::Payload> macEbPayloadIeList;
         bool macAutoRequest = true;
         bool macNotifyAllBeacons = false;
         bool macBeaconAutoRespond = true;
@@ -105,7 +111,7 @@ class INET_API Ieee802154MacPib
      */
     Ieee802154MacPib(Ieee802154Address deviceExtendedAddress, uint8_t injectedDsn,
             uint32_t ccaDurationUs = 128, const std::vector<Ieee802154MacSetRequest>& startupOverrides = {}, uint8_t injectedBsn = 0,
-            bool superframeEnabled = false);
+            bool superframeEnabled = false, bool enhancedEnabled = false, uint8_t injectedEbsn = 0);
 
     /** GET echoes the exact name; an unsupported name returns UNSUPPORTED_ATTRIBUTE with no value. */
     Ieee802154MacGetConfirm get(const std::string& attribute) const;
@@ -123,7 +129,7 @@ class INET_API Ieee802154MacPib
      * values; true restores selected defaults and uses the caller-supplied
      * DSN. PHY reset and operation abortion belong to the service provider.
      */
-    void reset(bool setDefaultPib, uint8_t injectedDsn, uint8_t injectedBsn = 0);
+    void reset(bool setDefaultPib, uint8_t injectedDsn, uint8_t injectedBsn = 0, uint8_t injectedEbsn = 0);
     /** Clause 10.21.3: clear PAN and coordinator references, preserving other PIB values. */
     void clearAssociation();
     /** Retire the parent binding while retaining this coordinator's own PAN and short address. */

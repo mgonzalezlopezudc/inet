@@ -275,10 +275,12 @@ class INET_API Ieee802154StandardMac : public SimpleModule, public IIeee802154Ma
             const physicallayer::Ieee802154PhyReceiveIndication& quality,
             const std::optional<Ieee802154SuperframeReceptionAnchor>& anchor);
     void beginResetPhy();
-    std::optional<uint64_t> beaconPreparation;
-    uint64_t beaconResponses = 0;
+    struct BeaconPreparation { uint64_t id; Ieee802154MacBeaconRequest request; };
+    std::optional<BeaconPreparation> beaconPreparation;
+    std::deque<Ieee802154MacBeaconRequest> beaconResponses;
     void completeBeaconPreparation(const Ieee802154MacServiceResult& result);
-    void transmitBeacon(uint64_t id, bool automatic);
+    void transmitBeacon(uint64_t id, bool automatic, const Ieee802154MacBeaconRequest& request);
+    Ptr<Ieee802154Frame> makeEnhancedBeacon(const Ieee802154MacBeaconRequest& request);
     void transmitScanRequest();
     struct AssociationRequest {
         uint64_t id;

@@ -57,11 +57,26 @@ Request an enhanced beacon with empty, matching and nonmatching filters and requ
 
 Also vary enhanced scan suppression/address inputs, supplied versus generated IE lists, automatic source-address NONE/SHORT/FULL, and filter enablement. Read/write/reset the enhanced PIB attributes; require valid defaults/retention, value-copy lifetime and the permitted SET status for invalid or unavailable attributes. No unspecified identity or unsupported attribute may become a fabricated successful response.
 
+Set reserved filter control/attribute bits in an otherwise valid received request: ignore
+them for automatic decisions and preserve actual upper-notification values. Locally generated
+reserved bits remain invalid. For non-scan directed beacons, require destination/PAN filtering
+before notification; retain foreign-PAN scan discovery and optional wire-field presence when
+a carried destination PAN supplies the effective source PAN.
+
+Set received EBR Frame Pending to one with valid FCS: process it through the same automatic
+and upper-directed paths as the FP0 control, while locally generated EBRs retain FP0.
+
 Obligations: ENHANCED-12 through ENHANCED-14, ENHANCED-16 and ENHANCED-17 excluding periodic selection.
 
 ## IEEE802154-C-ENHANCED-SCHEDULE
 
 Repeat synchronization, CAP DATA and both GTS directions with enhanced beacons. Observe actual IE-derived windows/grants, length-dependent CAP fit and loss/reacquisition; no second schedule may be inferred from unrelated data.
+
+Vary live allocated count independently of advertised GTS records: retain a live grant
+after its positive advertisement expires and retain zero-start removal/denial records
+after allocation ends. Reject unusable lengths/counts before partial schedule updates,
+while ignoring reserved field bits on reception. Observe actual longer-beacon CAP start,
+candidate rollback and ordinary-CAP capacity under descriptor pressure.
 
 Before scheduled integration, require the periodic enhanced-selection attribute to be unavailable. Once implemented, write macUseEnhancedBeacon true/false and observe the corresponding actual periodic beacon formats, retaining the same schedule/grant owner. Default/nondefault reset must apply the selected default/retention behavior.
 
