@@ -1,0 +1,283 @@
+{
+  "scope": "Context-independent outgoing outer ICMPv6 RS/RA in both initial IPHC and NHC-chain encoding",
+  "cwd": "/home/miguel/workspace/inet-6lowpan-standard",
+  "source_sha256": {
+    "src/inet/linklayer/lowpan/LowpanLayer.cc": "831eb8d991c98c9be16daa500f37cac4307c40ce396d7209a32432d16bec78c4",
+    "tests/protocol/6lowpan/LowpanDiscoveryCompression.test": "4143124a17c1162104195cff2e8b9d2e1d0d4b04d42c622f280851234d14718b",
+    "tests/protocol/6lowpan/discovery-compression.md": "d0a873299e373462a0b2781d3e0ba39337efdf38eebca146065cfeb548519d3c",
+    "doc/whatsnew/compatible/lowpan-discovery-compression.txt": "e1abaff534d05cca07bc0cecc298fc381d654516365a5cce3e7837f0c4fbd927"
+  },
+  "checks": [
+    {
+      "command": [
+        "make",
+        "MODE=debug",
+        "-j2"
+      ],
+      "mode": "debug",
+      "exit_code": 0,
+      "log": "/home/miguel/workspace/.codex-artifacts/lowpan-discovery-compression-20261116/build-debug.log"
+    },
+    {
+      "command": [
+        "make",
+        "MODE=release",
+        "-j2"
+      ],
+      "mode": "release",
+      "exit_code": 0,
+      "log": "/home/miguel/workspace/.codex-artifacts/lowpan-discovery-compression-20261116/build-release.log"
+    },
+    {
+      "command": [
+        "opp_run_protocol_tests",
+        "--load",
+        ".",
+        "-p",
+        "inet",
+        "-m",
+        "debug",
+        "--no-build",
+        "-w",
+        "^tests/protocol/6lowpan$",
+        "-f",
+        "Lowpan(DiscoveryCompression|StatefulContexts|ExtensionNhc|RouterDiscovery)\\.test$"
+      ],
+      "mode": "debug",
+      "exit_code": 0,
+      "fixtures": 4,
+      "runs": 5,
+      "new_fixture_runs": 2,
+      "seed": 0,
+      "log": "/home/miguel/workspace/.codex-artifacts/lowpan-discovery-compression-20261116/protocol-debug.log"
+    },
+    {
+      "command": [
+        "opp_run_module_tests",
+        "--load",
+        ".",
+        "-p",
+        "inet",
+        "-m",
+        "debug",
+        "--no-build",
+        "-f",
+        "Lowpan(OwnedBindings|DynamicBindings|MixedNeighbourDiscovery)\\.test$"
+      ],
+      "mode": "debug",
+      "exit_code": 0,
+      "fixtures": 3,
+      "runs": 3,
+      "log": "/home/miguel/workspace/.codex-artifacts/lowpan-discovery-compression-20261116/module-debug.log"
+    },
+    {
+      "command": [
+        "doc/project/enforcement/check-architecture.sh",
+        "src/inet/linklayer/lowpan"
+      ],
+      "exit_code": 0,
+      "log": "/home/miguel/workspace/.codex-artifacts/lowpan-discovery-compression-20261116/architecture.log"
+    },
+    {
+      "command": [
+        "doc/project/enforcement/check-naming.sh",
+        "src/inet/linklayer/lowpan"
+      ],
+      "exit_code": 0,
+      "log": "/home/miguel/workspace/.codex-artifacts/lowpan-discovery-compression-20261116/naming.log"
+    },
+    {
+      "command": [
+        "doc/project/enforcement/check-source-seals.sh",
+        "src/inet/linklayer/lowpan/LowpanLayer.cc"
+      ],
+      "exit_code": 0,
+      "log": "/home/miguel/workspace/.codex-artifacts/lowpan-discovery-compression-20261116/source-seals.log"
+    }
+  ],
+  "parent_comparison_checks": [
+    {
+      "command": [
+        "opp_run_protocol_tests",
+        "--load",
+        ".",
+        "-p",
+        "inet",
+        "-m",
+        "debug",
+        "--no-build",
+        "-w",
+        "^tests/protocol/6lowpan$",
+        "-f",
+        "LowpanDiscoveryCompression\\.test$"
+      ],
+      "cwd": "/home/miguel/workspace/inet-6lowpan-standard",
+      "mode": "debug",
+      "exit_code": 1,
+      "status": "OBSERVED_PARENT_FAILURE",
+      "executed_simulations": 1,
+      "skipped_simulations": 1,
+      "log": "/home/miguel/workspace/.codex-artifacts/lowpan-discovery-compression-20261116/parent-protocol.log"
+    },
+    {
+      "command": [
+        "./LowpanDiscoveryCompression_dbg",
+        "-u",
+        "Cmdenv",
+        "-r",
+        "1",
+        "--check-signals=false",
+        "--result-dir=/home/miguel/workspace/.codex-artifacts/lowpan-discovery-compression-20261116/parent-extension-results",
+        "-n",
+        "/home/miguel/workspace/inet-6lowpan-standard/src:.:../../../lib",
+        "omnetpp.ini",
+        "_defaults.ini"
+      ],
+      "cwd": "/home/miguel/workspace/inet-6lowpan-standard/tests/protocol/6lowpan/work/LowpanDiscoveryCompression",
+      "mode": "debug",
+      "exit_code": 1,
+      "status": "OBSERVED_PARENT_FAILURE",
+      "supplementary_simulations": 1,
+      "log": "/home/miguel/workspace/.codex-artifacts/lowpan-discovery-compression-20261116/parent-extension.log"
+    }
+  ],
+  "artifact_sha256": {
+    "/home/miguel/workspace/.codex-artifacts/lowpan-discovery-compression-20261116/build-debug.log": "5a9b11c08f26aecc6767d129adc43c86d2c49f96a3ce48b4db4a7e1882d90661",
+    "/home/miguel/workspace/.codex-artifacts/lowpan-discovery-compression-20261116/build-release.log": "f38af66c7884ddd4587b455284a437679cac1ad3b8569ad4117ba044ebedc3d4",
+    "/home/miguel/workspace/.codex-artifacts/lowpan-discovery-compression-20261116/protocol-debug.log": "76637cd17ba9d130f23629368412adf4e17a80391f03bcd653768c2bc4686220",
+    "/home/miguel/workspace/.codex-artifacts/lowpan-discovery-compression-20261116/module-debug.log": "15987cd407411803e1d87ac5622d89853959824fe0228378d6ff370e2c0a3dce",
+    "/home/miguel/workspace/.codex-artifacts/lowpan-discovery-compression-20261116/architecture.log": "21a5c76254de41eab0151b63d3351b6d4d0e242d9f8a2cdf3056b5b0f6ddee41",
+    "/home/miguel/workspace/.codex-artifacts/lowpan-discovery-compression-20261116/naming.log": "7b003bb1f254feabd4cac482b98f4c6d6cc171c5ae729375e7d97b1986105e05",
+    "/home/miguel/workspace/.codex-artifacts/lowpan-discovery-compression-20261116/source-seals.log": "4d5110553efecb3ef3b5837e2c26e345ad8bdd3edeeaf3aab5502dc60769dc16",
+    "/home/miguel/workspace/.codex-artifacts/lowpan-discovery-compression-20261116/parent-protocol.log": "725ff9e15162e89c93ba50ff131cdb2340a536d214a526edae049fd7fb55b5a1",
+    "/home/miguel/workspace/.codex-artifacts/lowpan-discovery-compression-20261116/parent-extension.log": "98723da61219b495d5f663dec734f0f2639b9722cba9e78ba5195a2e513b71cc",
+    "/home/miguel/workspace/.codex-artifacts/lowpan-discovery-compression-20261116/runtime/LowpanOwnedBindings/test.err": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+    "/home/miguel/workspace/.codex-artifacts/lowpan-discovery-compression-20261116/runtime/LowpanOwnedBindings/_defaults.ini": "971cad1cb7d426025e643349557688a1420fcd0274b6a9cfa907aa353ac73361",
+    "/home/miguel/workspace/.codex-artifacts/lowpan-discovery-compression-20261116/runtime/LowpanOwnedBindings/OwnedBindingCheck.cc": "b5ccad8bb99ad38f6cb5e232fc5ba4580dfc15fce945c523bc5fa4b92eb9e8fd",
+    "/home/miguel/workspace/.codex-artifacts/lowpan-discovery-compression-20261116/runtime/LowpanOwnedBindings/omnetpp.ini": "9d0a05afaf42d71753529037cf3a423622b187f332b9a0557eba382c44a45629",
+    "/home/miguel/workspace/.codex-artifacts/lowpan-discovery-compression-20261116/runtime/LowpanOwnedBindings/test.out": "0443d00aa89983c1823208bc66b6a459c013f10d6def29af57dd77e4a2463715",
+    "/home/miguel/workspace/.codex-artifacts/lowpan-discovery-compression-20261116/runtime/LowpanDiscoveryCompression/ContextDiscoveryCheck.cc": "613419971d8de7fdf0cf173c9fc245df871da2f439437abc7a765315b736c60f",
+    "/home/miguel/workspace/.codex-artifacts/lowpan-discovery-compression-20261116/runtime/LowpanDiscoveryCompression/test.err": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+    "/home/miguel/workspace/.codex-artifacts/lowpan-discovery-compression-20261116/runtime/LowpanDiscoveryCompression/_defaults.ini": "971cad1cb7d426025e643349557688a1420fcd0274b6a9cfa907aa353ac73361",
+    "/home/miguel/workspace/.codex-artifacts/lowpan-discovery-compression-20261116/runtime/LowpanDiscoveryCompression/omnetpp.ini": "811a852838f86faf89a0093ff80c0f3a34ba6482540711b36ea2115fa463acf9",
+    "/home/miguel/workspace/.codex-artifacts/lowpan-discovery-compression-20261116/runtime/LowpanDiscoveryCompression/test.out": "6fa28a1a337c0b1dbafad4968dff969ef3ae5940bf5b00612879d6759a1b8a06",
+    "/home/miguel/workspace/.codex-artifacts/lowpan-discovery-compression-20261116/runtime/LowpanDynamicBindings/test.err": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+    "/home/miguel/workspace/.codex-artifacts/lowpan-discovery-compression-20261116/runtime/LowpanDynamicBindings/_defaults.ini": "971cad1cb7d426025e643349557688a1420fcd0274b6a9cfa907aa353ac73361",
+    "/home/miguel/workspace/.codex-artifacts/lowpan-discovery-compression-20261116/runtime/LowpanDynamicBindings/BindingCheck.cc": "02a06b36baed5417d1540a453d5d224db5332a3bccada5ca41f04601d957d965",
+    "/home/miguel/workspace/.codex-artifacts/lowpan-discovery-compression-20261116/runtime/LowpanDynamicBindings/omnetpp.ini": "09f97d65268c8b04f3e1b4730d7915bcaa79c3c89842d77151ff9c4016ab6cc1",
+    "/home/miguel/workspace/.codex-artifacts/lowpan-discovery-compression-20261116/runtime/LowpanDynamicBindings/test.out": "d44ec6872929d5678dae38272cd073aace06558415c5193df8a71299071631cf",
+    "/home/miguel/workspace/.codex-artifacts/lowpan-discovery-compression-20261116/runtime/LowpanRouterDiscovery/DiscoveryCheck.cc": "152dc30614885d83529cceb23578002f87f4dbdeeddaad2633e35931a9972946",
+    "/home/miguel/workspace/.codex-artifacts/lowpan-discovery-compression-20261116/runtime/LowpanRouterDiscovery/test.err": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+    "/home/miguel/workspace/.codex-artifacts/lowpan-discovery-compression-20261116/runtime/LowpanRouterDiscovery/_defaults.ini": "971cad1cb7d426025e643349557688a1420fcd0274b6a9cfa907aa353ac73361",
+    "/home/miguel/workspace/.codex-artifacts/lowpan-discovery-compression-20261116/runtime/LowpanRouterDiscovery/omnetpp.ini": "8c6c4631a1cb40f81c02c4a548449f2e30357ff4130515a84eb00c1bd21184a4",
+    "/home/miguel/workspace/.codex-artifacts/lowpan-discovery-compression-20261116/runtime/LowpanRouterDiscovery/test.out": "fd5c1d803ab5d0fcd2322df206e55fb483c6f48bb743f37e5e3882ff7375de50",
+    "/home/miguel/workspace/.codex-artifacts/lowpan-discovery-compression-20261116/runtime/LowpanStatefulContexts/StatefulContextCheck.cc": "502ece1e62a49f461bf9a0af202b4cbd7f4d6ce9bfe14a53e4a1f5b5756fd623",
+    "/home/miguel/workspace/.codex-artifacts/lowpan-discovery-compression-20261116/runtime/LowpanStatefulContexts/test.err": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+    "/home/miguel/workspace/.codex-artifacts/lowpan-discovery-compression-20261116/runtime/LowpanStatefulContexts/_defaults.ini": "971cad1cb7d426025e643349557688a1420fcd0274b6a9cfa907aa353ac73361",
+    "/home/miguel/workspace/.codex-artifacts/lowpan-discovery-compression-20261116/runtime/LowpanStatefulContexts/omnetpp.ini": "7c6551eb1118131e4eff50a08c4ead57744250df37e2754c4548a84d24a7620a",
+    "/home/miguel/workspace/.codex-artifacts/lowpan-discovery-compression-20261116/runtime/LowpanStatefulContexts/test.out": "674904c3db4f01550e99fc3890727dd42386e54cb68edb2660e0b0eda614cdc7",
+    "/home/miguel/workspace/.codex-artifacts/lowpan-discovery-compression-20261116/runtime/LowpanExtensionNhc/ExtensionNhcCheck.cc": "701e778e40efb10a05c4e65ea065d47b39afd95275f50e99a9c2c30ad78b675a",
+    "/home/miguel/workspace/.codex-artifacts/lowpan-discovery-compression-20261116/runtime/LowpanExtensionNhc/test.err": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+    "/home/miguel/workspace/.codex-artifacts/lowpan-discovery-compression-20261116/runtime/LowpanExtensionNhc/_defaults.ini": "971cad1cb7d426025e643349557688a1420fcd0274b6a9cfa907aa353ac73361",
+    "/home/miguel/workspace/.codex-artifacts/lowpan-discovery-compression-20261116/runtime/LowpanExtensionNhc/omnetpp.ini": "d709ff6d388a30db892f71dbce4f7880d26217cb1125120dc693f92e03ef6acd",
+    "/home/miguel/workspace/.codex-artifacts/lowpan-discovery-compression-20261116/runtime/LowpanExtensionNhc/test.out": "e952a092c96007a3925147eb455f65b56f66b8362271726e263560f727397e7b",
+    "/home/miguel/workspace/.codex-artifacts/lowpan-discovery-compression-20261116/runtime/LowpanMixedNeighbourDiscovery/ExchangeCheck.cc": "6afea19575421c416d9a8531e47cfff850395b387442957622e0ca9616ae034f",
+    "/home/miguel/workspace/.codex-artifacts/lowpan-discovery-compression-20261116/runtime/LowpanMixedNeighbourDiscovery/test.err": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+    "/home/miguel/workspace/.codex-artifacts/lowpan-discovery-compression-20261116/runtime/LowpanMixedNeighbourDiscovery/_defaults.ini": "971cad1cb7d426025e643349557688a1420fcd0274b6a9cfa907aa353ac73361",
+    "/home/miguel/workspace/.codex-artifacts/lowpan-discovery-compression-20261116/runtime/LowpanMixedNeighbourDiscovery/omnetpp.ini": "2405846ec24abc74aba5c0da0f1122388b78ae0312a85ee8b738343f33b1cb80",
+    "/home/miguel/workspace/.codex-artifacts/lowpan-discovery-compression-20261116/runtime/LowpanMixedNeighbourDiscovery/test.out": "0862710cb5bea6fbb04d417d22c8e21a1ad0ffb3f370986286bf5ce7b737473e",
+    "/home/miguel/workspace/.codex-artifacts/lowpan-discovery-compression-20261116/parent-runtime/ContextDiscoveryCheck.cc": "613419971d8de7fdf0cf173c9fc245df871da2f439437abc7a765315b736c60f",
+    "/home/miguel/workspace/.codex-artifacts/lowpan-discovery-compression-20261116/parent-runtime/test.err": "80aa8d4a092ddef5fbbeac5bd187359621c0b54c0bb9b70eae3237e0e4bbb22e",
+    "/home/miguel/workspace/.codex-artifacts/lowpan-discovery-compression-20261116/parent-runtime/_defaults.ini": "971cad1cb7d426025e643349557688a1420fcd0274b6a9cfa907aa353ac73361",
+    "/home/miguel/workspace/.codex-artifacts/lowpan-discovery-compression-20261116/parent-runtime/omnetpp.ini": "811a852838f86faf89a0093ff80c0f3a34ba6482540711b36ea2115fa463acf9",
+    "/home/miguel/workspace/.codex-artifacts/lowpan-discovery-compression-20261116/parent-runtime/test.out": "c44f802ebb4ddc6ced6fb3ea968ff8fad14d77f8520433b84cee2676f1038393",
+    "/home/miguel/workspace/.codex-artifacts/lowpan-discovery-compression-20261116/parent-extension-results/General-case=1-#0.sca": "afcbe260f2fb5162f03248cdaf02f5b5ef7a83974d129c7cf389820f2f1e96ef",
+    "/home/miguel/workspace/.codex-artifacts/lowpan-discovery-compression-20261116/parent-extension-results/General-case=1-#0.vci": "b36a34dd7aa1cfedf70ca27030d033ac2fff86ed19d6072f84200b5935017202",
+    "/home/miguel/workspace/.codex-artifacts/lowpan-discovery-compression-20261116/parent-extension-results/General-case=1-#0.vec": "ca1750520c3166362b5b34cb4aa82ab292b20e98b5c444692537fd7333edba1d",
+    "/home/miguel/workspace/.codex-artifacts/lowpan-discovery-compression-20261116/parent-source.json": "d59b3a2532103b24fed0cf8f2f463ee59a2ed48769518217fe3bc18880684303",
+    "/home/miguel/workspace/.codex-artifacts/lowpan-discovery-compression-20261116/library-provenance.log": "a4119f3aa692a290b4000126356a2c13ddbbbe9cebebf7f4e3e72fa31e57be41"
+  },
+  "parent_source_and_library": {
+    "parent_commit": "c571a6e13a40c6345dae6e6d8d1e72ec021c42a8",
+    "layer_sha256": "1373cf1f71f38c5557f361f441271431c4efacbf984c7d54865d4246ab1dc04a",
+    "fixture_sha256": "4143124a17c1162104195cff2e8b9d2e1d0d4b04d42c622f280851234d14718b",
+    "debug_library_sha256": "f4ebd0230fffe39ad30ae15289c58d37ca964f4e32a18644695eb37ec66f90c3",
+    "protocol_exit_code": 1,
+    "protocol_case0_wire": "RS SAC0 DAC0 CID0; RA SAC0 DAC1 CID1 DCI5; actual peer Lowpan malformed drop; no decoded RA",
+    "supplementary_case1_exit_code": 1,
+    "supplementary_case1_wire": "HBH RS SAC1 CID1 SCI5, NHC1; router lacks context; lowpan drop/no RA"
+  },
+  "runtime_provenance": {
+    "debug_library": "/home/miguel/workspace/inet-6lowpan-standard/src/libINET_dbg.so",
+    "debug_library_sha256": "187c92eb7d2c99c8aed54128b750eea801bf0c2ae2feccbc78c604e08a367dad",
+    "generated_test_binary_sha256": "7507a7266cbf14479a15eb3eaeb3d4c87f7d106f330a79c98832e36b5ac471a2"
+  },
+  "observations": {
+    "columns": [
+      "scenario",
+      "rs_frames",
+      "ra_frames",
+      "context_dependent_frames",
+      "nhc_rs",
+      "adaptation_drops",
+      "decoded_ra"
+    ],
+    "rows": [
+      [
+        0,
+        1,
+        1,
+        0,
+        0,
+        0,
+        1
+      ],
+      [
+        1,
+        1,
+        1,
+        0,
+        1,
+        0,
+        1
+      ]
+    ],
+    "same_fixture_before_after": true,
+    "parent_case0_ra_dac_cid_dci": [
+      1,
+      1,
+      5
+    ],
+    "parent_case1_hbh_rs_sac_cid_sci_nh": [
+      1,
+      1,
+      5,
+      1
+    ],
+    "real_radio_receiver_drops_observed_before_fix": true,
+    "decoded_ra_checksum_checked": true,
+    "stateful_data_and_nhc_controls_preserved": true
+  },
+  "counts": {
+    "protocol_fixtures": 4,
+    "protocol_simulations": 5,
+    "new_fixture_simulations": 2,
+    "module_fixtures": 3,
+    "module_simulations": 3,
+    "observed_parent_failed_simulations": 2,
+    "parent_protocol_skipped_simulations": 1
+  },
+  "limits": [
+    "Only outgoing outer ICMPv6 RS/RA; no inner-tunnel ND claim",
+    "No new IPv6 fragmentation/ND validation or context advertisement distribution",
+    "Release compilation passed; runtime semantic assertions exercised in debug",
+    "No feature matrix or full-library sanitizer"
+  ],
+  "independent_review": {
+    "verdict": "25 PASS, 9 N/A, 0 FLAG, 0 QUESTION",
+    "scope": "frozen source/fixture/docs, parent/fixed provenance and staged boundary/commit body",
+    "findings": "none",
+    "reviewer_runs": "none",
+    "source_equivalent_immediate_parent": "c380770608 differs from actual executed parent c571a6e13a only in plan text"
+  }
+}

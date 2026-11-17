@@ -1,0 +1,251 @@
+{
+  "cwd": "/home/miguel/workspace/inet-6lowpan-standard",
+  "checks": [
+    {
+      "command": [
+        "make",
+        "MODE=debug",
+        "-j2"
+      ],
+      "mode": "debug",
+      "exit_code": 0,
+      "log": "/home/miguel/workspace/.codex-artifacts/lowpan-p10-border-20261116/build-debug.log"
+    },
+    {
+      "command": [
+        "make",
+        "MODE=release",
+        "-j2"
+      ],
+      "mode": "release",
+      "exit_code": 0,
+      "log": "/home/miguel/workspace/.codex-artifacts/lowpan-p10-border-20261116/build-release.log"
+    },
+    {
+      "command": [
+        "opp_run_protocol_tests",
+        "--load",
+        ".",
+        "-p",
+        "inet",
+        "-m",
+        "debug",
+        "--no-build",
+        "-w",
+        "^tests/protocol/6lowpan$",
+        "-f",
+        "Lowpan(AuthorityValidity|BorderRouterRegistration|RegistrationAuthority|NeighborRegistration|RegistrarValidity|HostRegistration)\\.test$"
+      ],
+      "mode": "debug",
+      "exit_code": 0,
+      "fixtures": 6,
+      "runs": 15,
+      "seed": 0,
+      "log": "/home/miguel/workspace/.codex-artifacts/lowpan-p10-border-20261116/protocol-verification.log"
+    },
+    {
+      "command": [
+        "opp_run_module_tests",
+        "--load",
+        ".",
+        "-p",
+        "inet",
+        "-m",
+        "debug",
+        "--no-build",
+        "-f",
+        "Lowpan(OwnedBindings|DynamicBindings|MixedNeighbourDiscovery)\\.test$"
+      ],
+      "mode": "debug",
+      "exit_code": 0,
+      "fixtures": 3,
+      "runs": 3,
+      "log": "/home/miguel/workspace/.codex-artifacts/lowpan-p10-border-20261116/module-debug.log"
+    },
+    {
+      "command": [
+        "doc/project/enforcement/check-architecture.sh",
+        "src/inet/linklayer/lowpan"
+      ],
+      "exit_code": 0,
+      "log": "/home/miguel/workspace/.codex-artifacts/lowpan-p10-border-20261116/architecture.log"
+    },
+    {
+      "command": [
+        "doc/project/enforcement/check-naming.sh",
+        "src/inet/linklayer/lowpan"
+      ],
+      "exit_code": 0,
+      "log": "/home/miguel/workspace/.codex-artifacts/lowpan-p10-border-20261116/naming.log"
+    },
+    {
+      "command": [
+        "doc/project/enforcement/check-source-seals.sh",
+        "src/inet/linklayer/lowpan/LowpanIpv6NeighbourDiscovery.cc",
+        "src/inet/linklayer/lowpan/LowpanIpv6NeighbourDiscovery.ned",
+        "src/inet/linklayer/lowpan/LowpanRegistrationAuthority.h",
+        "src/inet/linklayer/lowpan/LowpanRegistrationAuthority.cc"
+      ],
+      "exit_code": 0,
+      "log": "/home/miguel/workspace/.codex-artifacts/lowpan-p10-border-20261116/source-seals.log"
+    }
+  ],
+  "artifact_sha256": {
+    "/home/miguel/workspace/.codex-artifacts/lowpan-p10-border-20261116/build-debug.log": "f72d1c9e90bc24c9b6463665a67478016c510dcf86d743b40249098e07c26505",
+    "/home/miguel/workspace/.codex-artifacts/lowpan-p10-border-20261116/build-release.log": "b5e2acec39c2f5751661df344c0a95c90b3bb98edc9cb0b69fd3786870736c38",
+    "/home/miguel/workspace/.codex-artifacts/lowpan-p10-border-20261116/protocol-verification.log": "775bfb61afadf42f2b0d3027fada28ff945cadc8106ac32461fe66251e2e6de2",
+    "/home/miguel/workspace/.codex-artifacts/lowpan-p10-border-20261116/module-debug.log": "c89898ea8f24c7c5c0c681dd56ac59987451924493c4c7736b8aa7bbf6015b2a",
+    "/home/miguel/workspace/.codex-artifacts/lowpan-p10-border-20261116/architecture.log": "21a5c76254de41eab0151b63d3351b6d4d0e242d9f8a2cdf3056b5b0f6ddee41",
+    "/home/miguel/workspace/.codex-artifacts/lowpan-p10-border-20261116/naming.log": "7b003bb1f254feabd4cac482b98f4c6d6cc171c5ae729375e7d97b1986105e05",
+    "/home/miguel/workspace/.codex-artifacts/lowpan-p10-border-20261116/source-seals.log": "4d5110553efecb3ef3b5837e2c26e345ad8bdd3edeeaf3aab5502dc60769dc16",
+    "/home/miguel/workspace/.codex-artifacts/lowpan-p10-border-20261116/runtime/verification/LowpanHostRegistration/test.err": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+    "/home/miguel/workspace/.codex-artifacts/lowpan-p10-border-20261116/runtime/verification/LowpanHostRegistration/_defaults.ini": "971cad1cb7d426025e643349557688a1420fcd0274b6a9cfa907aa353ac73361",
+    "/home/miguel/workspace/.codex-artifacts/lowpan-p10-border-20261116/runtime/verification/LowpanHostRegistration/omnetpp.ini": "76f228d792520a09f2c62e8f7fe339d44d6876e283c0f931378470f531feda54",
+    "/home/miguel/workspace/.codex-artifacts/lowpan-p10-border-20261116/runtime/verification/LowpanHostRegistration/test.out": "3c794b8e0db3608202ceb6fb01f5d34f85181982459f5a234aedd8bb2a671d62",
+    "/home/miguel/workspace/.codex-artifacts/lowpan-p10-border-20261116/runtime/verification/LowpanHostRegistration/HostCheck.cc": "1c6e8c35f540d02000efd410ed71039010b7cbdfb490322940cb73658c284861",
+    "/home/miguel/workspace/.codex-artifacts/lowpan-p10-border-20261116/runtime/verification/LowpanRegistrarValidity/test.err": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+    "/home/miguel/workspace/.codex-artifacts/lowpan-p10-border-20261116/runtime/verification/LowpanRegistrarValidity/_defaults.ini": "971cad1cb7d426025e643349557688a1420fcd0274b6a9cfa907aa353ac73361",
+    "/home/miguel/workspace/.codex-artifacts/lowpan-p10-border-20261116/runtime/verification/LowpanRegistrarValidity/ValidityCheck.cc": "0a34a10d058bb5f04f902324d61a0c68809ca578ee3973713f4b89793452dd62",
+    "/home/miguel/workspace/.codex-artifacts/lowpan-p10-border-20261116/runtime/verification/LowpanRegistrarValidity/omnetpp.ini": "c4581d48ee5332b2d8192459a00cedccfcf7fc1e4fa98692391c28300b490d61",
+    "/home/miguel/workspace/.codex-artifacts/lowpan-p10-border-20261116/runtime/verification/LowpanRegistrarValidity/test.out": "f7af14a6e443ce9878758d6661376103091928f6517c461b1558cbe87d91377a",
+    "/home/miguel/workspace/.codex-artifacts/lowpan-p10-border-20261116/runtime/verification/LowpanOwnedBindings/test.err": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+    "/home/miguel/workspace/.codex-artifacts/lowpan-p10-border-20261116/runtime/verification/LowpanOwnedBindings/_defaults.ini": "971cad1cb7d426025e643349557688a1420fcd0274b6a9cfa907aa353ac73361",
+    "/home/miguel/workspace/.codex-artifacts/lowpan-p10-border-20261116/runtime/verification/LowpanOwnedBindings/OwnedBindingCheck.cc": "b5ccad8bb99ad38f6cb5e232fc5ba4580dfc15fce945c523bc5fa4b92eb9e8fd",
+    "/home/miguel/workspace/.codex-artifacts/lowpan-p10-border-20261116/runtime/verification/LowpanOwnedBindings/omnetpp.ini": "9d0a05afaf42d71753529037cf3a423622b187f332b9a0557eba382c44a45629",
+    "/home/miguel/workspace/.codex-artifacts/lowpan-p10-border-20261116/runtime/verification/LowpanOwnedBindings/test.out": "c0916a2386a380df9a2e144037e27266fb7bc8266f109e627f3df20799ff8a75",
+    "/home/miguel/workspace/.codex-artifacts/lowpan-p10-border-20261116/runtime/verification/LowpanRegistrationAuthority/test.err": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+    "/home/miguel/workspace/.codex-artifacts/lowpan-p10-border-20261116/runtime/verification/LowpanRegistrationAuthority/AuthorityCheck.cc": "f9da4e4736e02a5b78821e21d074f1791f5dedc6121c7235bafc5f7568d11e3c",
+    "/home/miguel/workspace/.codex-artifacts/lowpan-p10-border-20261116/runtime/verification/LowpanRegistrationAuthority/_defaults.ini": "971cad1cb7d426025e643349557688a1420fcd0274b6a9cfa907aa353ac73361",
+    "/home/miguel/workspace/.codex-artifacts/lowpan-p10-border-20261116/runtime/verification/LowpanRegistrationAuthority/omnetpp.ini": "8a81b7b0aafb0047cd01264a9ba8865dec235ac96764ae9e38b94f3816befbaf",
+    "/home/miguel/workspace/.codex-artifacts/lowpan-p10-border-20261116/runtime/verification/LowpanRegistrationAuthority/test.out": "0569cfa067697b5568f1f38d8c546ff6b7a18be5f309bf2af590f5d90f8bd92b",
+    "/home/miguel/workspace/.codex-artifacts/lowpan-p10-border-20261116/runtime/verification/LowpanDynamicBindings/test.err": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+    "/home/miguel/workspace/.codex-artifacts/lowpan-p10-border-20261116/runtime/verification/LowpanDynamicBindings/_defaults.ini": "971cad1cb7d426025e643349557688a1420fcd0274b6a9cfa907aa353ac73361",
+    "/home/miguel/workspace/.codex-artifacts/lowpan-p10-border-20261116/runtime/verification/LowpanDynamicBindings/BindingCheck.cc": "02a06b36baed5417d1540a453d5d224db5332a3bccada5ca41f04601d957d965",
+    "/home/miguel/workspace/.codex-artifacts/lowpan-p10-border-20261116/runtime/verification/LowpanDynamicBindings/omnetpp.ini": "09f97d65268c8b04f3e1b4730d7915bcaa79c3c89842d77151ff9c4016ab6cc1",
+    "/home/miguel/workspace/.codex-artifacts/lowpan-p10-border-20261116/runtime/verification/LowpanDynamicBindings/test.out": "b2344340aca8272b86976889daec5781ba3583988c90d24567f00eabc1725807",
+    "/home/miguel/workspace/.codex-artifacts/lowpan-p10-border-20261116/runtime/verification/LowpanNeighborRegistration/test.err": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+    "/home/miguel/workspace/.codex-artifacts/lowpan-p10-border-20261116/runtime/verification/LowpanNeighborRegistration/_defaults.ini": "971cad1cb7d426025e643349557688a1420fcd0274b6a9cfa907aa353ac73361",
+    "/home/miguel/workspace/.codex-artifacts/lowpan-p10-border-20261116/runtime/verification/LowpanNeighborRegistration/RegistrationCheck.cc": "432b3da2488b7f3b17d95262af3dadac3f68d59a8c7325e4e757140fa09da346",
+    "/home/miguel/workspace/.codex-artifacts/lowpan-p10-border-20261116/runtime/verification/LowpanNeighborRegistration/omnetpp.ini": "92c767dc7407760d53d45270c02806d096a667d0c71006484a4688246e83c2d8",
+    "/home/miguel/workspace/.codex-artifacts/lowpan-p10-border-20261116/runtime/verification/LowpanNeighborRegistration/test.out": "dd1cdd730fef8ba79e3845eb32bc34229f7bb954d781b180f198a8051ac8f536",
+    "/home/miguel/workspace/.codex-artifacts/lowpan-p10-border-20261116/runtime/verification/LowpanBorderRouterRegistration/test.err": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+    "/home/miguel/workspace/.codex-artifacts/lowpan-p10-border-20261116/runtime/verification/LowpanBorderRouterRegistration/_defaults.ini": "971cad1cb7d426025e643349557688a1420fcd0274b6a9cfa907aa353ac73361",
+    "/home/miguel/workspace/.codex-artifacts/lowpan-p10-border-20261116/runtime/verification/LowpanBorderRouterRegistration/omnetpp.ini": "d93c8ee873a6c9a258957eba006d351b258b324c7657900c285e5c18fb2b375d",
+    "/home/miguel/workspace/.codex-artifacts/lowpan-p10-border-20261116/runtime/verification/LowpanBorderRouterRegistration/test.out": "3d25668fdd68e0bc96d6ecbfb917a051af6b70d1d3a68ea66edf08211423061e",
+    "/home/miguel/workspace/.codex-artifacts/lowpan-p10-border-20261116/runtime/verification/LowpanBorderRouterRegistration/BorderCheck.cc": "98c3a0d6654df6f6be089a70876ec6dfa86f6fcc7206e377f753dafd466d3e7f",
+    "/home/miguel/workspace/.codex-artifacts/lowpan-p10-border-20261116/runtime/verification/LowpanMixedNeighbourDiscovery/ExchangeCheck.cc": "6afea19575421c416d9a8531e47cfff850395b387442957622e0ca9616ae034f",
+    "/home/miguel/workspace/.codex-artifacts/lowpan-p10-border-20261116/runtime/verification/LowpanMixedNeighbourDiscovery/test.err": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+    "/home/miguel/workspace/.codex-artifacts/lowpan-p10-border-20261116/runtime/verification/LowpanMixedNeighbourDiscovery/_defaults.ini": "971cad1cb7d426025e643349557688a1420fcd0274b6a9cfa907aa353ac73361",
+    "/home/miguel/workspace/.codex-artifacts/lowpan-p10-border-20261116/runtime/verification/LowpanMixedNeighbourDiscovery/omnetpp.ini": "2405846ec24abc74aba5c0da0f1122388b78ae0312a85ee8b738343f33b1cb80",
+    "/home/miguel/workspace/.codex-artifacts/lowpan-p10-border-20261116/runtime/verification/LowpanMixedNeighbourDiscovery/test.out": "0ef33389ac8233e3749d10c2bf14d2276b0dd3fc7cff2e6189ad4e444982dd80",
+    "/home/miguel/workspace/.codex-artifacts/lowpan-p10-border-20261116/runtime/verification/LowpanAuthorityValidity/AuthorityValidityCheck.cc": "1ccf48d4c5536c4cb66e973d27de28d70a6130ffbd2a9c0285302e15b5c6edda",
+    "/home/miguel/workspace/.codex-artifacts/lowpan-p10-border-20261116/runtime/verification/LowpanAuthorityValidity/test.err": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+    "/home/miguel/workspace/.codex-artifacts/lowpan-p10-border-20261116/runtime/verification/LowpanAuthorityValidity/_defaults.ini": "971cad1cb7d426025e643349557688a1420fcd0274b6a9cfa907aa353ac73361",
+    "/home/miguel/workspace/.codex-artifacts/lowpan-p10-border-20261116/runtime/verification/LowpanAuthorityValidity/omnetpp.ini": "ebaf5aa16cd3185b35aa5ae8deb6dcd3790c9fa7fc669abfa87f7a49ae321b70",
+    "/home/miguel/workspace/.codex-artifacts/lowpan-p10-border-20261116/runtime/verification/LowpanAuthorityValidity/test.out": "075b491784bfc5693cc5002675fa11c5b1c082176bb70227aee8efe82c480bd5",
+    "/home/miguel/workspace/.codex-artifacts/lowpan-p10-border-20261116/authority-validity-prerequisite.patch": "35dd2ea868152041dc9b457e4106481ff41bea7d8152e737be6b60cb4cc9e084",
+    "/home/miguel/workspace/.codex-artifacts/lowpan-p10-border-20261116/protocol-first.log": "24a864812d73f76bc3d382a694c4f482c83f6fb7cd2f9af0455a20abf29fd0ea",
+    "/home/miguel/workspace/.codex-artifacts/lowpan-p10-border-20261116/attempt-passive-peer.err": "ba0e2387350ec5f45d6424b4f510bad4f8f7dbf8f21b9ed9ebe99716854741d7",
+    "/home/miguel/workspace/.codex-artifacts/lowpan-p10-border-20261116/protocol-final.log": "49a988f32a2538d34f7b61a752e9248df8fac7f3ea290ea1d8127ddafb55a70a",
+    "/home/miguel/workspace/.codex-artifacts/lowpan-p10-border-20261116/attempt-fs-prefix-default.err": "62a464f80d6de104c05e57e40e41ee1a58327a9e8ba776a04e41e00486686bb6"
+  },
+  "release": "Compilation PASS; protocol semantic assertions exercised in debug, not claimed under NDEBUG",
+  "not_run": [
+    "6LR asynchronous relay",
+    "ABRO/context distribution",
+    "feature matrix",
+    "full-library sanitizer"
+  ],
+  "scope": "Native border-router local admission coupled to the existing routed duplicate-address authority",
+  "source_sha256": {
+    "src/inet/linklayer/lowpan/LowpanIpv6NeighbourDiscovery.cc": "346ddb718b580990adc6c4adaeaff6f64c7947e93c8ec33c90b5f575ce214ee7",
+    "src/inet/linklayer/lowpan/LowpanIpv6NeighbourDiscovery.ned": "ba80d4bde355695cca2849addd05060102a110e8f9b8749537cfb0b31d7fe181",
+    "src/inet/linklayer/lowpan/LowpanRegistrationAuthority.h": "1ef6a68c47d29b446dc404c6065bb4a49b28d5d14c04b616ee3ae7afbcee6ac2",
+    "src/inet/linklayer/lowpan/LowpanRegistrationAuthority.cc": "42e9465b6367d12c8831b8939a1dfc6b1d8cb4970aeb76aa12b7397bdd82fa41",
+    "tests/protocol/6lowpan/LowpanBorderRouterRegistration.test": "09f6c210849b1119cbc7489a57f08a5c7489b713d6e1ec587b789d06de6bcf45",
+    "tests/protocol/6lowpan/border-router-registration.md": "36b023be391859500ff211deba1247a5f8a3034795c7858c8cda3c11a3d862c9",
+    "doc/whatsnew/compatible/lowpan-border-router-registration.txt": "b087db16d7146acfff7aba5ed3c0352ae83bea766b05821e7a15ba48638da4f0"
+  },
+  "observations": {
+    "columns": [
+      "scenario",
+      "rs",
+      "ra",
+      "aro_ns",
+      "aro_na",
+      "dar",
+      "dac",
+      "transit_dar",
+      "transit_dac",
+      "udp",
+      "host_success"
+    ],
+    "rows": [
+      [
+        0,
+        1,
+        1,
+        16,
+        16,
+        19,
+        19,
+        18,
+        19,
+        4,
+        0
+      ],
+      [
+        1,
+        1,
+        1,
+        16,
+        16,
+        19,
+        19,
+        18,
+        19,
+        4,
+        0
+      ],
+      [
+        2,
+        1,
+        1,
+        2,
+        2,
+        0,
+        0,
+        0,
+        0,
+        2,
+        2
+      ]
+    ],
+    "scripted_expiry_priorities": [
+      -10,
+      10
+    ],
+    "ordinary_native_ns_na_per_scripted_run": 1,
+    "registration_count_observer_checks_owned_routes_and_bindings": true,
+    "remote_zero_and_shorter_lease_preserve_local_route_deadline_seconds": 131,
+    "foreign_domain_refusal_does_not_reserve_authority_entry": true,
+    "local_expiry_preserves_longer_authority_lease": true
+  },
+  "model_interpretation": "DAD and native leases independent; DAR never mutates NC. Read-only all-interface live-local-owner guard conservatively extends literal empty-DAD admission. No remote-lease accounting or lifetime extension.",
+  "diagnostic_attempts": [
+    {
+      "log": "/home/miguel/workspace/.codex-artifacts/lowpan-p10-border-20261116/protocol-first.log",
+      "classification": "Fixture checker misinterpreted real-host multicast RS at passive bare peer; both scripted runs passed"
+    },
+    {
+      "log": "/home/miguel/workspace/.codex-artifacts/lowpan-p10-border-20261116/protocol-final.log",
+      "classification": "Discarded fs native variant: ordinary configurator default 2592000-second advertised prefix lifetime exceeded fs horizon at initialization; no native-border behavior evaluated"
+    }
+  ],
+  "prerequisite": "e8f1dd522c; standalone p10-authority-validity-verification.json records actual parent failure and fixed isolated PASS",
+  "independent_review": {
+    "verdict": "22 PASS, 12 N/A, 0 FLAG, 0 QUESTION",
+    "findings": "F1 resolved by separate numeric prerequisite; no remaining actionable findings",
+    "scope": "frozen source, fixture/docs and records; no review-agent simulation runners"
+  }
+}

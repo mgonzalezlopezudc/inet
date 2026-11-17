@@ -1,0 +1,270 @@
+{
+  "base": "32bf7b81d76081bda810065643b2f51afa55ad54",
+  "checks": [
+    {
+      "name": "debug-build",
+      "command": [
+        "make",
+        "MODE=debug",
+        "-j8"
+      ],
+      "exit_code": 0,
+      "log": "/tmp/lowpan-p8/debug-build.log"
+    },
+    {
+      "name": "unit",
+      "command": [
+        "opp_run_unit_tests",
+        "--load",
+        ".",
+        "-p",
+        "inet",
+        "-m",
+        "debug",
+        "--no-build",
+        "-f",
+        "(Lowpan.*|Icmpv6PseudoHeader)\\.test$"
+      ],
+      "exit_code": 0,
+      "log": "/tmp/lowpan-p8/unit.log"
+    },
+    {
+      "name": "module",
+      "command": [
+        "opp_run_module_tests",
+        "--load",
+        ".",
+        "-p",
+        "inet",
+        "-m",
+        "debug",
+        "--no-build",
+        "-f",
+        "(Lowpan.*|Ieee802154ReceiveMetadata|Icmpv6LocalChecksum|Icmpv6ExtensionChecksum)\\.test$"
+      ],
+      "exit_code": 0,
+      "log": "/tmp/lowpan-p8/module.log"
+    },
+    {
+      "name": "protocol",
+      "command": [
+        "opp_run_protocol_tests",
+        "--load",
+        ".",
+        "-p",
+        "inet",
+        "-m",
+        "debug",
+        "--no-build",
+        "-w",
+        "^tests/protocol/6lowpan$",
+        "-f",
+        "Lowpan(StatefulContexts|Native.*)\\.test$"
+      ],
+      "exit_code": 0,
+      "log": "/tmp/lowpan-p8/protocol.log"
+    },
+    {
+      "name": "release-build",
+      "command": [
+        "make",
+        "MODE=release",
+        "-j8"
+      ],
+      "exit_code": 0,
+      "log": "/tmp/lowpan-p8/release-build.log"
+    }
+  ],
+  "feature_checks": [
+    {
+      "name": "disable-lowpan",
+      "command": [
+        "opp_featuretool",
+        "disable",
+        "LowpanExamples",
+        "LowpanTests",
+        "Lowpan"
+      ],
+      "exit_code": 0,
+      "log": "/tmp/lowpan-p8/features/disable-lowpan.log"
+    },
+    {
+      "name": "off-build",
+      "command": [
+        "make",
+        "MODE=debug",
+        "-j8"
+      ],
+      "exit_code": 0,
+      "log": "/tmp/lowpan-p8/features/off-build.log"
+    },
+    {
+      "name": "off-module",
+      "command": [
+        "opp_run_module_tests",
+        "--load",
+        ".",
+        "-p",
+        "inet",
+        "-m",
+        "debug",
+        "--no-build",
+        "-f",
+        "(Ieee802154ReceiveMetadata|Icmpv6LocalChecksum|Icmpv6ExtensionChecksum|ICMPv6_delivery|IPv6_packet_too_big)\\.test$"
+      ],
+      "exit_code": 0,
+      "log": "/tmp/lowpan-p8/features/off-module.log"
+    },
+    {
+      "name": "off-fingerprint",
+      "command": [
+        "opp_run_fingerprint_tests",
+        "--load",
+        ".",
+        "-p",
+        "inet",
+        "-m",
+        "debug",
+        "--no-build",
+        "-w",
+        "^examples/wireless/nic$",
+        "-c",
+        "^CSMAWith(UnitDisk|ApskScalar|ApskDimensional)Radio$",
+        "-r",
+        "^0$"
+      ],
+      "exit_code": 0,
+      "log": "/tmp/lowpan-p8/features/off-fingerprint.log"
+    },
+    {
+      "name": "enable-core",
+      "command": [
+        "opp_featuretool",
+        "enable",
+        "Lowpan"
+      ],
+      "exit_code": 0,
+      "log": "/tmp/lowpan-p8/features/enable-core.log"
+    },
+    {
+      "name": "disable-udp",
+      "command": [
+        "opp_featuretool",
+        "disable",
+        "-f",
+        "Udp"
+      ],
+      "exit_code": 0,
+      "log": "/tmp/lowpan-p8/features/disable-udp.log"
+    },
+    {
+      "name": "core-build",
+      "command": [
+        "make",
+        "MODE=debug",
+        "-j8"
+      ],
+      "exit_code": 0,
+      "log": "/tmp/lowpan-p8/features/core-build.log"
+    },
+    {
+      "name": "core-unit",
+      "command": [
+        "opp_run_unit_tests",
+        "--load",
+        ".",
+        "-p",
+        "inet",
+        "-m",
+        "debug",
+        "--no-build",
+        "-f",
+        "Lowpan(StatefulContexts|Iphc|IphcAcceptMatrix)\\.test$"
+      ],
+      "exit_code": 0,
+      "log": "/tmp/lowpan-p8/features/core-unit.log"
+    },
+    {
+      "name": "core-protocol",
+      "command": [
+        "opp_run_protocol_tests",
+        "--load",
+        ".",
+        "-p",
+        "inet",
+        "-m",
+        "debug",
+        "--no-build",
+        "-w",
+        "^tests/protocol/6lowpan$",
+        "-f",
+        "LowpanStatefulContexts\\.test$"
+      ],
+      "exit_code": 0,
+      "log": "/tmp/lowpan-p8/features/core-protocol.log"
+    },
+    {
+      "name": "refresh-disable-tests",
+      "command": [
+        "opp_featuretool",
+        "disable",
+        "LowpanTests"
+      ],
+      "exit_code": 0,
+      "log": "/tmp/lowpan-p8/features/refresh-disable-tests.log"
+    },
+    {
+      "name": "refresh-enable-tests",
+      "command": [
+        "opp_featuretool",
+        "enable",
+        "LowpanTests"
+      ],
+      "exit_code": 0,
+      "log": "/tmp/lowpan-p8/features/refresh-enable-tests.log"
+    },
+    {
+      "name": "restored-debug",
+      "command": [
+        "make",
+        "MODE=debug",
+        "-j8"
+      ],
+      "exit_code": 0,
+      "log": "/tmp/lowpan-p8/features/restored-debug.log"
+    },
+    {
+      "name": "restored-release",
+      "command": [
+        "make",
+        "MODE=release",
+        "-j8"
+      ],
+      "exit_code": 0,
+      "log": "/tmp/lowpan-p8/features/restored-release.log"
+    }
+  ],
+  "source_hashes": {
+    "src/inet/linklayer/lowpan/LowpanIphcCodec.cc": "c95735987aec7015c37405c21f853e0018d2cf3d9dbe4bcfdcb3b62ced2a29eb",
+    "src/inet/linklayer/lowpan/LowpanIphcCodec.h": "babf35d04b2129b668653606c2146501d3172baaaa03b87eb3239171cf1056ad",
+    "src/inet/linklayer/lowpan/LowpanLayer.cc": "03e25ed5b1849b20684079fc9abb9325dd899c6046ac2533af080adfe3a4170e",
+    "src/inet/linklayer/lowpan/LowpanLayer.h": "fc72cdccfa87b2a8cb7bc3da228c04ce6598b0cba348b3823386bcfb843e5a00",
+    "src/inet/linklayer/lowpan/LowpanLayer.ned": "68d770fd260248bb17055f6f672fd763d61dad79e94226a56c0842cf46f1b200",
+    "src/inet/linklayer/lowpan/LowpanContextTable.h": "013ebc5e17c78d8b9a76f10997cdacc4bafdc1e7e84dd06eb906658600b8eb36",
+    "src/inet/linklayer/lowpan/LowpanContextTable.cc": "f72a88d5d744239f1602e3fb5902eae5845e5b700d8babc74829417f181562a5",
+    "tests/unit/LowpanStatefulContexts.test": "379af104540c6a627d154bf679a7e23d24f145c0fde10261ed4aba151992610a",
+    "tests/protocol/6lowpan/LowpanStatefulContexts.test": "01a0cc1f52caf268358af25f4edbf3087cdf9690ac35900fe0c45ee8894e6347"
+  },
+  "results": {
+    "unit": 12,
+    "module": 62,
+    "protocol_fixtures": 6,
+    "protocol_parameter_runs": 12,
+    "core_unit": 3,
+    "core_protocol": 1,
+    "feature_off_module": 5,
+    "feature_off_fingerprint_configs": 3
+  },
+  "parent_protocol_comparison": "NOT_RUN: runtime context-install API absent on parent; old rejection identified from source, not presented as executed failure",
+  "feature_state_restored": true
+}

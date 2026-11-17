@@ -1,0 +1,20 @@
+{
+  "expected_length": 48,
+  "observed_length": 48,
+  "differences": [
+    {
+      "offset": 16,
+      "expected": 2,
+      "observed": 0
+    },
+    {
+      "offset": 32,
+      "expected": 2,
+      "observed": 0
+    }
+  ],
+  "matches_stored_peer_result": true,
+  "peer_revision": "5e35cfbc28bd43aa9ceb0d1edea44078d6e76830",
+  "verdict": "FAIL",
+  "classification": "Peer Mac64 IID derivation omits the RFC 6282 U/L inversion; INET expectation preserved"
+}

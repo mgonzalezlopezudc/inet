@@ -1,0 +1,167 @@
+{
+  "review_unit": "PR06",
+  "base": "baa11c82c9f3b2604a18ed3325b1df64f58c1108",
+  "tip": "31aeb7b60c23821674c3e08559aed005f39a905a",
+  "publication_commits": [
+    "C13",
+    "C14"
+  ],
+  "status": "PASS",
+  "commands": [
+    {
+      "name": "build-debug",
+      "argv": [
+        "make",
+        "MODE=debug",
+        "-j8"
+      ],
+      "cwd": "/home/miguel/workspace/inet-6lowpan-publication",
+      "started": "2026-11-17T08:42:26.070579+01:00",
+      "log": "/home/miguel/workspace/.codex-artifacts/lowpan-publication-20261117/pr06-combined/build-debug.log",
+      "exit_code": 0,
+      "finished": "2026-11-17T08:42:26.967322+01:00"
+    },
+    {
+      "name": "build-release",
+      "argv": [
+        "make",
+        "MODE=release",
+        "-j8"
+      ],
+      "cwd": "/home/miguel/workspace/inet-6lowpan-publication",
+      "started": "2026-11-17T08:42:26.967503+01:00",
+      "log": "/home/miguel/workspace/.codex-artifacts/lowpan-publication-20261117/pr06-combined/build-release.log",
+      "exit_code": 0,
+      "finished": "2026-11-17T08:42:37.526018+01:00"
+    },
+    {
+      "name": "unit-debug",
+      "argv": [
+        "opp_run_unit_tests",
+        "--load",
+        ".",
+        "-p",
+        "inet",
+        "-m",
+        "debug",
+        "--no-build",
+        "--no-concurrent",
+        "-f",
+        "(Ipv6AddressLifetimes|Ipv6NdRegistrationWire)\\.test$",
+        "--result-file",
+        "/home/miguel/workspace/.codex-artifacts/lowpan-publication-20261117/pr06-combined/unit-debug-result.json"
+      ],
+      "cwd": "/home/miguel/workspace/inet-6lowpan-publication",
+      "started": "2026-11-17T08:42:37.526495+01:00",
+      "log": "/home/miguel/workspace/.codex-artifacts/lowpan-publication-20261117/pr06-combined/unit-debug.log",
+      "library_sha256": "396c553c304497d180b3a6ab2e5c438e1a2970c7e99ec3aef11bd107f8785bc6",
+      "exit_code": 0,
+      "finished": "2026-11-17T08:42:44.522720+01:00"
+    },
+    {
+      "name": "module-debug",
+      "argv": [
+        "opp_run_module_tests",
+        "--load",
+        ".",
+        "-p",
+        "inet",
+        "-m",
+        "debug",
+        "--no-build",
+        "--no-concurrent",
+        "-f",
+        "(Ipv6NdUnsupportedRegistration)\\.test$",
+        "--result-file",
+        "/home/miguel/workspace/.codex-artifacts/lowpan-publication-20261117/pr06-combined/module-debug-result.json"
+      ],
+      "cwd": "/home/miguel/workspace/inet-6lowpan-publication",
+      "started": "2026-11-17T08:42:44.534945+01:00",
+      "log": "/home/miguel/workspace/.codex-artifacts/lowpan-publication-20261117/pr06-combined/module-debug.log",
+      "library_sha256": "396c553c304497d180b3a6ab2e5c438e1a2970c7e99ec3aef11bd107f8785bc6",
+      "exit_code": 0,
+      "finished": "2026-11-17T08:42:55.484758+01:00"
+    },
+    {
+      "name": "gate-commits",
+      "argv": [
+        "doc/project/enforcement/check-commits.sh",
+        "baa11c82c9f3b2604a18ed3325b1df64f58c1108..1bd303fa7b1082fe083051165f54e2dff9043143"
+      ],
+      "cwd": "/home/miguel/workspace/inet-6lowpan-publication",
+      "started": "2026-11-17T08:42:55.491999+01:00",
+      "log": "/home/miguel/workspace/.codex-artifacts/lowpan-publication-20261117/pr06-combined/gate-commits.log",
+      "exit_code": 0,
+      "finished": "2026-11-17T08:42:56.079469+01:00"
+    },
+    {
+      "name": "gate-classification",
+      "argv": [
+        "doc/project/enforcement/check-classification.sh",
+        "baa11c82c9f3b2604a18ed3325b1df64f58c1108..1bd303fa7b1082fe083051165f54e2dff9043143"
+      ],
+      "cwd": "/home/miguel/workspace/inet-6lowpan-publication",
+      "started": "2026-11-17T08:42:56.079846+01:00",
+      "log": "/home/miguel/workspace/.codex-artifacts/lowpan-publication-20261117/pr06-combined/gate-classification.log",
+      "exit_code": 0,
+      "finished": "2026-11-17T08:42:56.287626+01:00"
+    },
+    {
+      "name": "gate-whatsnew",
+      "argv": [
+        "doc/project/enforcement/check-whatsnew.sh",
+        "baa11c82c9f3b2604a18ed3325b1df64f58c1108..1bd303fa7b1082fe083051165f54e2dff9043143"
+      ],
+      "cwd": "/home/miguel/workspace/inet-6lowpan-publication",
+      "started": "2026-11-17T08:42:56.287915+01:00",
+      "log": "/home/miguel/workspace/.codex-artifacts/lowpan-publication-20261117/pr06-combined/gate-whatsnew.log",
+      "exit_code": 0,
+      "finished": "2026-11-17T08:42:57.443849+01:00"
+    }
+  ],
+  "started": "2026-11-17T08:42:26.060369+01:00",
+  "source_git_tree": "c65c69a0ae104bb641836662dcf33a5972d91287",
+  "tests_git_tree": "f88f10e64691a4326b19692a2e67c5f3f993c035",
+  "configuration_sha256": {
+    ".oppfeatures": "6056c451748eb76fd573bae739bb9ec4eb93e43766c30a4c49cb77ab941b80bb",
+    ".oppfeaturestate": "b06952dd9375d04782d2a1e3e57112bbc1f5ff74d118256dec14a8f4f62b7e27",
+    ".nedexclusions": "9c3b4d0fad4623e40a21d9e15701c09322a449c3ead2b77a79b6e9da7cfb51a2",
+    ".nedfolders": "61620a730620ca748a73822d7d33ed38211409c8e37a87d361800175f2180673"
+  },
+  "parent_comparison": "SOURCE_BASED_UNLESS_LINKED_FOCUSED_RECORD_SAYS_EXECUTED",
+  "focused_records": [
+    "/home/miguel/workspace/.codex-artifacts/lowpan-publication-20261117/c13-automated/record.json",
+    "/home/miguel/workspace/.codex-artifacts/lowpan-publication-20261117/c14-automated/record.json"
+  ],
+  "selections": {
+    "unit-debug": {
+      "paths": [
+        "tests/unit/Ipv6AddressLifetimes.test",
+        "tests/unit/Ipv6NdRegistrationWire.test"
+      ],
+      "fixture_sha256": {
+        "tests/unit/Ipv6AddressLifetimes.test": "9bd07b865f852b8a1f0b96be60775907b1fbb0772c017c83436338807caafab1",
+        "tests/unit/Ipv6NdRegistrationWire.test": "71e39654bb91184839bb73c30809e18d8d747c485de86210eb82b15659d68ddf"
+      },
+      "fixture_count": 2
+    },
+    "module-debug": {
+      "paths": [
+        "tests/module/Ipv6NdUnsupportedRegistration.test"
+      ],
+      "fixture_sha256": {
+        "tests/module/Ipv6NdUnsupportedRegistration.test": "b87507f22cbfc4218bf03b4f1b932148e66a27051f0cae397e31798c2ac7424f"
+      },
+      "fixture_count": 1
+    }
+  },
+  "finished": "2026-11-17T08:42:57.444232+01:00",
+  "baseline_modified": false,
+  "library_sha256": {
+    "debug": "396c553c304497d180b3a6ab2e5c438e1a2970c7e99ec3aef11bd107f8785bc6",
+    "release": "cdd074ab253e0578295038e72d77635a2a4798fd84f467baeab11a1442d758ee"
+  },
+  "original_tested_tip": "1bd303fa7b1082fe083051165f54e2dff9043143",
+  "plan": "plan/pending/6lowpan-publication-plan.md",
+  "executable_identity_repair": "/home/miguel/workspace/.codex-artifacts/lowpan-publication-20261117/metadata-history-repair-02/record.json"
+}

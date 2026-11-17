@@ -1,0 +1,144 @@
+{
+  "scope": "P9 NHC and the separately committed IPv6 chunk-ownership prerequisite; generic ND wire unit is supplemental preparation evidence only",
+  "base": "58b446708d",
+  "checks": [
+    {
+      "name": "debug-build",
+      "command": [
+        "make",
+        "MODE=debug",
+        "-j8"
+      ],
+      "exit_code": 0,
+      "log": "/tmp/lowpan-p9/final-debug-build.log"
+    },
+    {
+      "name": "unit",
+      "command": [
+        "opp_run_unit_tests",
+        "--load",
+        ".",
+        "-p",
+        "inet",
+        "-m",
+        "debug",
+        "--no-build",
+        "-f",
+        "(Lowpan.*|Ipv6NdRegistrationWire|Icmpv6PseudoHeader)\\.test$"
+      ],
+      "exit_code": 0,
+      "log": "/tmp/lowpan-p9/final-unit.log",
+      "fixtures": 15,
+      "parameter_runs": 15
+    },
+    {
+      "name": "module",
+      "command": [
+        "opp_run_module_tests",
+        "--load",
+        ".",
+        "-p",
+        "inet",
+        "-m",
+        "debug",
+        "--no-build",
+        "-f",
+        "(Lowpan.*|Ipv6SerializedFragment|Icmpv6LocalChecksum|Icmpv6ExtensionChecksum)\\.test$"
+      ],
+      "exit_code": 0,
+      "log": "/tmp/lowpan-p9/final-module.log",
+      "fixtures": 62,
+      "parameter_runs": 84
+    },
+    {
+      "name": "protocol",
+      "command": [
+        "opp_run_protocol_tests",
+        "--load",
+        ".",
+        "-p",
+        "inet",
+        "-m",
+        "debug",
+        "--no-build",
+        "-w",
+        "^tests/protocol/6lowpan$",
+        "-f",
+        "Lowpan.*\\.test$"
+      ],
+      "exit_code": 0,
+      "log": "/tmp/lowpan-p9/final-protocol.log",
+      "fixtures": 7,
+      "parameter_runs": 13
+    },
+    {
+      "name": "fingerprint",
+      "command": [
+        "opp_run_fingerprint_tests",
+        "--load",
+        ".",
+        "-p",
+        "inet",
+        "-m",
+        "debug",
+        "--no-build",
+        "-w",
+        "^examples/wireless/nic$",
+        "-c",
+        "^CSMAWith(UnitDisk|ApskScalar|ApskDimensional)Radio$",
+        "-r",
+        "^0$"
+      ],
+      "exit_code": 0,
+      "log": "/tmp/lowpan-p9/fingerprint.log",
+      "fixtures": 3,
+      "parameter_runs": 3
+    },
+    {
+      "name": "release-build",
+      "command": [
+        "make",
+        "MODE=release",
+        "-j8"
+      ],
+      "exit_code": 0,
+      "log": "/tmp/lowpan-p9/release-build.log"
+    }
+  ],
+  "source_sha256": {
+    "src/inet/linklayer/lowpan/LowpanIphcCodec.cc": "85ac94273f0c6472da3d1cad18038028455be1cd00734df4d1407cd734f2a610",
+    "src/inet/linklayer/lowpan/LowpanIphcCodec.h": "887343a388b8c37cf30f60ae120aa5731ee3bd4c7c9d41d7e67b516e28ec65b3",
+    "src/inet/linklayer/lowpan/LowpanLayer.cc": "7004d00ab1b729f8573ff17c4e3a2c9e942515967b604d00eb2947ae2b93c4fa",
+    "src/inet/linklayer/lowpan/LowpanNhcCodec.cc": "3d021aeabb1bd2511f6293bf68743399646a398dd0e7a8be3d117eeb0c604099",
+    "src/inet/linklayer/lowpan/LowpanNhcCodec.h": "4faa7cf02df11416a1f6ab84f97acf4c7192adb2f573b5ad1a6adea6e1ac3b43",
+    "src/inet/linklayer/lowpan/LowpanNhcExtensionHeader.msg": "9e36fb7508b41b9a11fe51cbf02a3ea0fd74d5663127b0e74e43900f739988e8",
+    "src/inet/linklayer/lowpan/LowpanNhcExtensionHeaderSerializer.cc": "0f5b15c46833367879286ea290b1c2c43f42a9695bb7200c8566c087dd2bbbba",
+    "src/inet/linklayer/lowpan/LowpanNhcExtensionHeaderSerializer.h": "96b1971fb3949531ecb75d94efebcaf92ecd4b64925a8c2afcfd763c2a69da16",
+    "src/inet/linklayer/lowpan/LowpanProtocolDissector.cc": "05593fa8c5a4715dba7f1d004d363c5275481352e91c5d32b008fef8d780a68f",
+    "src/inet/linklayer/lowpan/LowpanProtocolPrinter.cc": "6f8a5ef1e14e0909683efae0fe9d11bc0d418bef5e72f36e90c7e959d524cd8c",
+    "src/inet/networklayer/ipv6/Ipv6.cc": "fbeb99d82bf846de555dac30d06a4bc3df21e6ffb9e15814c33e590c2db4128b",
+    "tests/module/Ipv6SerializedFragment.test": "a2e14a520af71131d7f7b5a63578b5db92cef052d08719f57ba7119dcf028c9f",
+    "tests/module/LowpanNativeIpv6Fragment.test": "4d4b800bc5c3f2e88abbcf3dd0ac41a44ae25f768dbbb366aaa89b520cce6faa",
+    "tests/protocol/6lowpan/LowpanExtensionNhc.test": "8f8dc8b13fc44478dce49a48251eb0cee3e755351524887dedfd55ebbdc3bc47",
+    "tests/protocol/6lowpan/LowpanNativeReassembly.test": "e08fe90f8034bdf562798e2994985a63ddb1da33ef166ff3fd84d080e0504778",
+    "tests/protocol/6lowpan/extension-nhc.md": "4606dc19452f140c769c912fb8fa85444038d5d6fdf4a6ca78d95aab5508708d",
+    "tests/unit/Ipv6NdRegistrationWire.test": "fc025438cd660f72456737708d760a0b5523a2280925139466a91149b617fecf",
+    "tests/unit/LowpanExtensionNhcWire.test": "e74fc45f8ec316d2051af01e680cf849fdd0caf842ea743aff81c888e4e323b4",
+    "tests/unit/LowpanNhcChains.test": "8bfe6670b27b7bdeabbd3b7fa385f84d5a05150de8031ed39a5cdecbfb3de087"
+  },
+  "review": "Independent read-only P9 review found no runtime correctness defect; wire introspection placement and legal-chain frame-budget coverage corrected and rechecked. Generic ND consumer review remains separate.",
+  "attempts": [
+    {
+      "log": "/tmp/lowpan-p9/module.log",
+      "status": "FAIL",
+      "reason": "Three route-over fixtures exposed IPv6 decoded-header lifetime bug; one fixture retained pre-NHC wire bytes."
+    },
+    {
+      "log": "/tmp/lowpan-p9/fragment-fix-module.log",
+      "status": "PASS",
+      "fixtures": 5,
+      "reason": "Direct serialized fragments plus all four affected cases."
+    }
+  ],
+  "feature_matrix": "Final combined P8-P15 matrix remains pending; no baseline update performed."
+}

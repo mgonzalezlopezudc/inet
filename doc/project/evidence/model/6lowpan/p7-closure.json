@@ -1,0 +1,98 @@
+{
+  "production_commit": "6a11f885acd503273abd53ab47d546f12b38b41e",
+  "validation_base": "fde06276347eb9e5f0ab308d1e345540a5f4f3cf",
+  "production_source_unchanged": true,
+  "build_mode": "debug",
+  "library_status": "Matching debug and release builds confirmed; no production source changes",
+  "command": [
+    "opp_run_protocol_tests",
+    "--load",
+    ".",
+    "-p",
+    "inet",
+    "-m",
+    "debug",
+    "--no-build",
+    "-w",
+    "^tests/protocol/6lowpan$",
+    "-f",
+    "LowpanNative(IdentityIsolation|ReceiveRestart|TagGuards|Reassembly|FragmentBoundaries)\\.test$"
+  ],
+  "working_directory": "/home/miguel/workspace/inet-6lowpan-standard",
+  "exit_code": 0,
+  "log": "/tmp/lowpan-p7-closure-20261115/final-protocol.log",
+  "seed": 0,
+  "all_fixtures_passed": 5,
+  "all_parameter_runs_passed": 11,
+  "cases": {
+    "LowpanNativeIdentityIsolation": {
+      "path": "tests/protocol/6lowpan/LowpanNativeIdentityIsolation.test",
+      "sha256": "bc109dff28f5825a6f0f78d73ad118684bf982207108f80aa64c6f11cf1a8dd8",
+      "parameter_runs": 1,
+      "status": "PASS",
+      "output": "/tmp/lowpan-p7-closure-20261115/LowpanNativeIdentityIsolation.out"
+    },
+    "LowpanNativeReceiveRestart": {
+      "path": "tests/protocol/6lowpan/LowpanNativeReceiveRestart.test",
+      "sha256": "da6148c4087d8b3202822c9bdc1b0ec4bbbb89e9285eeadc0645f18f5a23c5c4",
+      "parameter_runs": 2,
+      "status": "PASS",
+      "output": "/tmp/lowpan-p7-closure-20261115/LowpanNativeReceiveRestart.out"
+    },
+    "LowpanNativeTagGuards": {
+      "path": "tests/protocol/6lowpan/LowpanNativeTagGuards.test",
+      "sha256": "37703d7ff4385bf3788cebc9ead9481743085d9cad57ebbddb654e4493304eae",
+      "parameter_runs": 2,
+      "status": "PASS",
+      "output": "/tmp/lowpan-p7-closure-20261115/LowpanNativeTagGuards.out"
+    },
+    "LowpanNativeReassembly": {
+      "path": "tests/protocol/6lowpan/LowpanNativeReassembly.test",
+      "sha256": "844da87a2112e52ca97a7b3c140c0af0b26db97c8af4992e91a0f944c927d715",
+      "parameter_runs": 2,
+      "status": "PASS",
+      "output": "/tmp/lowpan-p7-closure-20261115/LowpanNativeReassembly.out"
+    },
+    "LowpanNativeFragmentBoundaries": {
+      "path": "tests/protocol/6lowpan/LowpanNativeFragmentBoundaries.test",
+      "sha256": "f57a2f10b6071a84339ae4bb6942ab8e060f8965bba067eadc19649491d19ba6",
+      "parameter_runs": 4,
+      "status": "PASS",
+      "output": "/tmp/lowpan-p7-closure-20261115/LowpanNativeFragmentBoundaries.out"
+    }
+  },
+  "acceptance_status": "COMPLETE for bounded P0-P7 native first-release profile",
+  "scope_exclusions": [
+    "dynamic native ND/optimized ND",
+    "stateful IPHC and extension-header NHC",
+    "association/security/short unicast",
+    "mesh-under/paging/advanced fragmentation",
+    "live external MAC interoperability",
+    "agreement with pinned ns-3 on fully elided EUI-derived IIDs"
+  ],
+  "known_external_comparison": {
+    "result": "FAIL",
+    "artifact": "peer-elided-result.json",
+    "cause": "Pinned peer Mac64 IID derivation omits U/L-bit inversion; normative INET mapping independently passes"
+  },
+  "plan": "plan/done/6lowpan-implementation-plan.md",
+  "feature_state_sha256": "b06952dd9375d04782d2a1e3e57112bbc1f5ff74d118256dec14a8f4f62b7e27",
+  "debug_build": {
+    "command": [
+      "make",
+      "MODE=debug",
+      "-j8"
+    ],
+    "exit_code": 0,
+    "log": "/tmp/lowpan-p7-closure-20261115/debug-confirm.log"
+  },
+  "release_build": {
+    "command": [
+      "make",
+      "MODE=release",
+      "-j8"
+    ],
+    "exit_code": 0,
+    "log": "/tmp/lowpan-p7-closure-20261115/release-confirm.log"
+  }
+}

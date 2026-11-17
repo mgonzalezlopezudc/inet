@@ -1,0 +1,124 @@
+{
+  "scope": "P10 native RS receive and unicast RA responder",
+  "cwd": "/home/miguel/workspace/inet-6lowpan-standard",
+  "mode": "debug",
+  "seed": 0,
+  "full_p10_complete": false,
+  "source_sha256": {
+    "src/inet/linklayer/lowpan/LowpanIpv6NeighbourDiscovery.h": "93fb7eda21cef818b0919d881205239cd9005e14328bb90556948c0e6fe7bbfd",
+    "src/inet/linklayer/lowpan/LowpanIpv6NeighbourDiscovery.cc": "5ca80fa2015a900d9efe14c25c64174e9b8433345d9275f5bc76c4741126ecb2",
+    "src/inet/linklayer/lowpan/LowpanIpv6NeighbourDiscovery.ned": "fc5317a4e0e0fd4072645a3550a5e18116d791c6cf3062e5e661d260272feeed",
+    "tests/protocol/6lowpan/LowpanRouterDiscovery.test": "fc6035b00bf221134b0921028abe033a4f69d094c7f90ec3696c46497d13c7aa",
+    "tests/protocol/6lowpan/router-discovery.md": "f7643b4accb3ff783891de9bbfcd1b6e553a5d6e7dfd28887e440186f9213100",
+    "doc/whatsnew/compatible/lowpan-router-discovery.txt": "40910802205d7b2445c7ca93ea0cb00128df183ac73d73f95476872ef112be1d"
+  },
+  "checks": [
+    {
+      "command": [
+        "make",
+        "MODE=debug",
+        "-j8"
+      ],
+      "exit_code": 0,
+      "log": "/home/miguel/workspace/.codex-artifacts/lowpan-p10-stage2-20261115/validity-build.log"
+    },
+    {
+      "command": [
+        "opp_run_protocol_tests",
+        "--load",
+        ".",
+        "-p",
+        "inet",
+        "-m",
+        "debug",
+        "--no-build",
+        "-w",
+        "^tests/protocol/6lowpan$",
+        "-f",
+        "Lowpan(RouterDiscovery|NeighborRegistration)\\.test$"
+      ],
+      "exit_code": 0,
+      "fixtures": 2,
+      "runs": 2,
+      "log": "/home/miguel/workspace/.codex-artifacts/lowpan-p10-stage2-20261115/router-protocol.log"
+    },
+    {
+      "command": [
+        "doc/project/enforcement/check-architecture.sh",
+        "src/inet/linklayer/lowpan"
+      ],
+      "exit_code": 0,
+      "log": "/home/miguel/workspace/.codex-artifacts/lowpan-p10-stage2-20261115/router-architecture.log"
+    },
+    {
+      "command": [
+        "doc/project/enforcement/check-naming.sh",
+        "src/inet/linklayer/lowpan"
+      ],
+      "exit_code": 0,
+      "log": "/home/miguel/workspace/.codex-artifacts/lowpan-p10-stage2-20261115/router-naming.log"
+    },
+    {
+      "command": [
+        "make",
+        "MODE=release",
+        "-j8"
+      ],
+      "exit_code": 0,
+      "log": "/home/miguel/workspace/.codex-artifacts/lowpan-p10-stage2-20261115/router-validity-release.log"
+    }
+  ],
+  "new_protocol_assertions": {
+    "injected_frames": 11,
+    "radio_router_advertisements": 3,
+    "transmitted_fragments": 6,
+    "malformed_drops": 3,
+    "static_binding_unchanged": true,
+    "observed_response_times": [
+      "6.715891239699",
+      "8.847309593577",
+      "15.545312589034"
+    ],
+    "valid_lifetimes": [
+      [
+        193,
+        300,
+        4294967295
+      ],
+      [
+        191,
+        300,
+        4294967295
+      ],
+      [
+        184,
+        300,
+        4294967295
+      ]
+    ],
+    "preferred_lifetimes": [
+      [
+        93,
+        150,
+        4294967295
+      ],
+      [
+        91,
+        150,
+        4294967295
+      ],
+      [
+        84,
+        150,
+        4294967295
+      ]
+    ],
+    "pending_replies_canceled_on_crash_and_stop": true,
+    "advertising_rechecked_at_transmission": true
+  },
+  "not_run": [
+    "host discovery/registration client",
+    "feature matrix"
+  ],
+  "review": "Both source-review findings (advertising permission and randomized response delay) and prefix-address assertions resolved; independent review reports22PASS12N/A0FLAG0QUESTION. Final copied trace and six source/artifact hashes confirmed."
+}

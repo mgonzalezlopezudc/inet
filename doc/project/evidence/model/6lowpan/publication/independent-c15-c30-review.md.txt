@@ -1,0 +1,117 @@
+# Independent reconstruction review: C15–C30
+
+Reviewed 2026-11-17. Source/configuration/tests/index/refs/ledgers/seals remained read-only. Only this report and `independent-c15-c30-projection.json` were written. No build, simulation or test was launched by the reviewer.
+
+## Actionable findings
+
+No reconstruction-induced production-code defect was found in the bounded review. Two metadata corrections remain.
+
+1. **Low impact — attribute C19's precise failure event to its historical cohort.** Commit `ac442a6b16cebb509106e98cbcb2a348ded12189` says in its first body paragraph that the static Ethernet fixture fails on the first malformed DAR “at event 7.” Its retained new-prefix record explicitly says `NOT_RUN_SOURCE_BASED`; no compatible execution of the exact reconstructed parent produced that event number. The earlier event7 belongs to donor-parent evidence. Remove that precise runtime sentence and retain the checked-peek mechanism, or explicitly label the event as historical donor-parent evidence. The general source-based disclaimer later in the message does not identify the cohort of that concrete event. Rules: `PR-MSG-FACTS`, `PR-MSG-PLAN`/the approved execution contract's evidence-attribution requirement. This is an evidence-description correction, not a discovered protocol fault.
+
+2. **Low impact — C29 omits its assigned overview reconciliation.** Commit `253c762debdfaf9b3b61840f37891c6759e70829` introduces context advertisement distribution, but does not update `doc/project/evidence/model/6lowpan/coverage.md`. That current ledger still says this publication prefix implements P0–P7 and lists contexts, extension NHC and optimized ND as later units. C29's approved entry explicitly assigns the overview portion from `071ece0758`; its original purpose is to distinguish the completed selected P8–P10 profiles from the first-release acceptance and remaining P11–P15 work. Add a short C29-scoped checkpoint overview with present evidence/protocol-document pointers, retaining the existing first-release table/counts as C06-specific acceptance. Do not copy original runtime counts into a new-prefix PASS. Rules: `DR-WHAT-IS`, assigned-artifact convention and explicit C29 plan entry.
+
+Root has acknowledged both corrections for the final owner-preserving metadata fold. Neither needs a production/test change or another simulation campaign when executable identity is preserved. No exception-ledger row is proposed, and no unresolved human design question remains.
+
+## Reviewed scope
+
+- Base `1bd303fa7b1082fe083051165f54e2dff9043143`; immutable tip `4e4a15d85d846795c754bb459ec4efe5beb97462`, covering C15–C30. Later C31 or PR11 combined results are not silently substituted for exact C30 checks.
+- Pinned upstream `91219b0fa7d2794ee67ac8a3dd45c3a09cfc45b0`; corrected source oracle `1853c49ba0c29edeb2cfed5378c01305beb519ba`; approved ordering-probe/port inventory in `source-order-preflight-02`.
+- Scope: reconstruction-specific source/test preservation, reordered dependency surfaces, behavior-owned artifacts, stage claims, messages and evidence. Unchanged donor protocol internals were not re-audited wholesale.
+- Used current project map, review/contribution routes, general checklist, exception/seal registries and series/test/documentation rules; applied `inet-code-review`, `inet-architectural-requirements`, `inet-pull-request-authoring` and C++/OMNeT++/INET review references.
+- Applied the explicitly approved accelerated contract: focused per-commit debug checks, combined review-tip checks, labelled source-based parent comparisons and final C41 campaign. An absent parent execution is not treated as a runtime failure.
+
+## Verification and dependency trace
+
+- All **16** reviewed `src` cuts exactly match their approved preflight source trees. All **18 per-cut changed `.test` blob comparisons** match the corresponding probe. Exact tree/blob hashes are in `independent-c15-c30-projection.json`.
+- **C19:** only the malformed-ND guard, concrete ICMP header include and override are added before checked generic dispatch. The pre-host prefix contains no automatic-host or authority import. Its standalone static fixture is preserved.
+- **C20:** only local registration target validity and safe deadline construction change. `hasValidAddress` is available from C14. The fixture selects the `router` role, not borderRouter/authority; requested duration is bounded before constructing `SimTime`. No later authority source is copied backward.
+- **C21/C22:** C21 is exactly the three `flags`→`PEEK_FLAGS` substitutions with retained reverse proof. C22 adds the host control classifier, registration eligibility and local-delivery guard while retaining C19's guard and C21's names. Its role helper, ND dispatch/timers/notifications and NED inputs arrive together; no authority helper is required. Source union matches the approved port.
+- **C23:** advertised RetransTimer/floor, final-response grace and range-safe arithmetic remain in the host owner. Its literal RA/NA peer fixture uses the host role and no authority/relay. The corrected timing precedes C27's routed fallback consumer.
+- **C24–C29:** routed authority, lifetime repair, combined native-border admission, relay, discovery compression and authority-group distribution retain their separate approved cuts, fixture versions and reviewer documents. Release-note files assigned by the code slices are present in their owning commits.
+- **C30:** updated registrar/relay/authority behavior is introduced without the future updated host. Its NED comment, C++ initialization rejection and reviewer introduction still identify automatic updated-host activation as unavailable. The later C33 host behavior is not copied backward.
+- Inspected C15–C30 retained records: incremental debug build, every nonempty assigned focused selection and three fast series gates report PASS/exit0. Parent comparisons are marked `NOT_RUN_SOURCE_BASED`. PR07–PR10 combined records identify their actual immutable tips and both compilation modes; their commands/results are separate from the focused records. C30's exact-cut evidence remains its own focused record.
+- Checked changed Markdown targets and heading anchors at **each owning cut**, not merely the final range tip. No broken local target/anchor or forward local dependency was found in this selection. Missing historical records are linked through immutable input URLs. External URL reachability was not fetched.
+- Two inherited document-header gaps were disclosed to root: C29's `tests/protocol/6lowpan/context-advertisements.md` and C30's `tests/protocol/6lowpan/extended-registration-races.md` have no `DR-HEADER` metadata line. The donor files already lack it; these are not new reordering/runtime defects. Root may normalize the new reviewer artifacts in the same metadata fold while preserving the historical donor snapshot separately.
+- No baseline update and no sealed packet-source modification occurs in this range. No ledger/seal change is needed.
+
+## Not verified and residual limits
+
+No duplicate runtime execution was performed by the reviewer. Exact-parent runtime checks remain unexecuted where labelled source-based. Complete normative protocol correctness, arbitrary configurations, future C31–C40 cuts and final C41 acceptance remain outside this review.
+
+The previously discovered direct-launcher gap remains specifically the C06 minimal-closure example executions. Root is correcting that scope with exact-prefix library/NED paths and explicit launcher environment. It does not invalidate these ordinary U/M/P records, whose explicit project include/library/NED paths and direct test-binary execution were independently traced in the prior report. No fresh leaf-example result is inferred here.
+
+Compliance: **metadata corrections required; no demonstrated new production-code defect.** Before reusing execution evidence after the metadata fold, retain the pre-rewrite checkpoint, map old tested cut IDs to new commits and prove identical executable source/fixture/configuration inputs.
+
+## Canonical general checklist
+
+Exact canonical questions are retained. Verdicts cover this reconstruction surface, not a fresh audit of unchanged original protocol internals. Finding2 concerns documentation/plan rules outside a separate general-checklist item.
+
+**[QR-DESIGN-MINIMAL] Does the change preserve required behavior with the least complex sufficient mechanism?** PASS — no cleanup-specific production mechanism is introduced.
+
+**[AR-ORG-CONTRACTS] Does a new interface define a concrete replacement role?** PASS — owner/domain/ND declarations retain their assigned donor roles without new speculative interfaces.
+
+**[AR-ORG-CONTRACTS] Do substitutable implementations preserve the contract's declared outcomes?** PASS — exact source preservation and explicit static/local/routed role boundaries are retained.
+
+**[PR-SPLIT-ONE-CHANGE / PR-SPLIT-SIZE] Does a commit hold a part that can stand alone?** PASS — approved storage/server/responder/host/authority/relay/distribution cuts stay separate; C22 explains its coupled activation.
+
+**[PR-SPLIT-PREPARE] Does preparation come before the change that needs it?** PASS — local validity and malformed-wire guard precede automatic hosts; retry repair precedes routed fallback; updated registrar precedes updated host.
+
+**[PR-MSG-BODY / PR-MSG-WHY] Does a substantial commit explain itself?** PASS — each substantive message explains its need, action and resulting behavior.
+
+**[PR-MSG-SUMMARY] Does a commit body start with a summary?** PASS — parent limitations and changed actions are distinguishable; finding1 concerns attribution of one precise event, not the mechanism summary.
+
+**[PR-MSG-FACTS] Does a commit message describe only the final change?** FLAG — finding1: C19's unqualified donor event7 must not be presented as an observed exact-prefix parent event. Disposition: correct owning message, no ledger row.
+
+**[PR-REQ-STORY] Does a pull request description answer the reviewer's questions up front?** N/A — no published PR description in scope.
+
+**[AR-ORG-CONTRACT-PURITY] Does a contract header declare anything that is not part of the role?** PASS — reconstruction adds no non-role interface body/policy.
+
+**[AR-ORG-VIS-SPLIT] Does protocol/model code contain visualization or instrumentation logic?** N/A — no reconstruction-specific visualization change.
+
+**[AR-ORG-KERNEL] Does the change reimplement or patch an OMNeT++ kernel facility inside INET?** N/A — no kernel change.
+
+**[AR-MOD-COMPOSITION] Is new behavior added by composition, or by inheritance / a growing god-module?** PASS — host, authority, relay and context owners remain separately assigned as approved.
+
+**[AR-COM-SOCKETS] Does a new application talk to a transport protocol via raw messages?** N/A — no new application implementation in reconstruction scope.
+
+**[AR-COM-DIRECT] Is a zero-time message standing in for a required direct call?** PASS — no direct-call/scheduling substitution is introduced by the ports.
+
+**[AR-COM-NOTIFY] Is a behavior-driving signal really an independent notification?** PASS — notifications and lifecycle paths remain source-identical to the approved cuts.
+
+**[AR-OBS-SIGNALS] Can attaching an observer change modeled behavior?** PASS — reconstruction adds no observer dependency; original fixture assertions/observers remain preserved.
+
+**[AR-OBS-NED-TRUTH] Does prose/code duplicate what a NED declaration owns?** PASS — C23's retry comments and C30's updated-host restriction match their actual declared/implemented scope.
+
+**[AR-OBS-INTROSPECTION] Does a new protocol ship its introspection support?** PASS — representation/introspection support from C13 precedes registration consumers; reconstruction loses no assigned slice.
+
+**[AR-CFG-INFER / QR-DUP] Is a derivable fact restated instead of inferred?** PASS — no cleanup-specific runtime configuration or duplicated production state.
+
+**[QR-OBJECT-OWNERSHIP] Does each object follow its declared ownership model on every supported path?** PASS — owner code, cleanup and direct lifecycle fixture bytes match intended cuts; no new ownership edit in the ports.
+
+**[AR-CFG-PARAMS] Are new parameters/fields well-formed?** PASS — host/authority/distribution declarations and consuming code travel together; no future parameter use found in reordered fixtures.
+
+**[AR-EXT-REUSE] Does each new mechanism need to exist?** PASS — no reconstruction-only helper persists in production.
+
+**[AR-EXT-NOCORE] Does adding a protocol require editing core code?** PASS — source ports remain in the planned optional protocol owners; sealed packet code unchanged.
+
+**[AR-EXT-MINIMAL-SURFACE] Is a new member more visible than its callers need?** PASS — no visibility expansion beyond approved donor APIs.
+
+**[AR-EXT-VIRTUAL-IS-A-PROMISE] Is a new virtual a stated extension point?** PASS — C19/C22 overrides fulfill existing IPv6 hooks; no speculative virtual is added by reconstruction.
+
+**[AR-BUILD-DECLARATIVE] Are build values hardcoded?** PASS — no machine-specific production build change.
+
+**[RR-NUMERIC-STABLE] Is an externally exposed enum value or named numeric code explicitly assigned?** PASS — wire values and the prepared generic representation are preserved.
+
+**[AR-QUAL-NAMING] Do new NED/`.msg`/semantic names follow the conventions?** PASS — C21 isolates exactly the planned constant rename; no reconstruction naming drift.
+
+**[AR-QUAL-LOGGING] Is a programming error logged instead of thrown?** PASS — no altered invariant/error-handling semantics in the ports.
+
+**[AR-QUAL-DETERMINISM] Does simulation logic depend on non-deterministic sources or pointer ordering?** PASS — no reconstruction change to model randomness/event semantics; fixture seeds/stimuli remain intact.
+
+**[AR-QUAL-TESTS] Does the change ship with tests matching its nature?** PASS — 18 per-cut fixture blob comparisons match; production protocol tests/documents stay with their behavior.
+
+**[AR-QUAL-TRACEABILITY] Does a commit that moves a recorded expectation explain the movement?** N/A — no stored baseline change.
+
+**[AR-QUAL-DISPLAY] Does a new module have a distinguishing icon?** PASS — reconstruction preserves declared NED composition rather than introducing a new module surface.
+
+REVIEW: 28 PASS, 5 N/A, 1 FLAG, 0 QUESTION

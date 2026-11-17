@@ -1,0 +1,117 @@
+# Independent reconstruction review: C06–C14
+
+Reviewed 2026-11-17. Source, configuration, tests, index, refs, ledgers and seals were read-only. Only this report and the adjacent diagnostic projection JSON were written. No build or test was launched by the reviewer.
+
+## Actionable findings
+
+No reconstruction-induced production-code defect was found in this bounded review. Two documentation regressions need correction before publication. The direct-example checkout-resolution gap discovered during review is recorded separately under not-verified evidence below.
+
+1. **Low impact — C11 omits two assigned user-guide replacements.** At `f13e2576022a1e9158ae04d8b1720a9bad5569e0`, `doc/src/users-guide/ch-802154.rst:89` still describes stateless IPHC, and lines103–104 list stateful IPHC and extension-header NHC outside the profile. The newly ported context and NHC paragraphs at lines109 and124 describe those implemented capabilities, so the guide contradicts itself. Original donor `68b2b07355` changes the opening capability sentence to “RFC 6282 IPHC, extension-header NHC, and UDP NHC with carried checksums” and removes stateful IPHC/extension-header NHC from the exclusions. Port both omitted hunks into **C11**, retaining C07's correctly scoped external-reference wording. C08's donor adds only the context paragraph; the two omitted replacements are owned by C11. Rules: `DR-WHAT-IS`, behavior-owned artifact convention in the publication plan. No simulation is needed for this prose-only correction with unchanged executable inputs.
+
+2. **Low impact — C06's example README links forward to an absent C07 artifact.** At `1758fe1ddfa145df918e26358e7bbd30619cecea`, `examples/lowpan/README.md:28` points to `../../doc/project/evidence/protocol/6lowpan/checks/peer/README.md`; that file first arrives at C07. The adjacent capture/reference PASS statements at lines24–25 also lack the current-versus-donor distinction before C07 performs the fresh external comparisons. In C06, use the immutable input-head peer URL and identify that external agreement as historical donor evidence, or state its new-prefix acceptance is pending. C07 can then install the current local link and fresh results. Rules: `DR-LINK-RELATIVE`, `DR-WHAT-IS`, publication-plan early immutable-reference requirement. No model or fixture change is required.
+
+Both corrections are expected within this reconstruction; no exception-ledger row is proposed. There is no unresolved human design question.
+
+## Reviewed scope
+
+- Base `445acdb630849eaaca4cd565b4dbf5f0a9efd1dd`; tip `1bd303fa7b1082fe083051165f54e2dff9043143`, covering C06–C14 and PR03–PR06 preparations.
+- Corrected oracle `1853c49ba0c29edeb2cfed5378c01305beb519ba`; pinned upstream `91219b0fa7d2794ee67ac8a3dd45c3a09cfc45b0`.
+- Scope was reconstruction correctness: preserving approved source/test slices, behavior-owned artifacts, stage-specific claims, dependency order, messages and evidence honesty. Unchanged original protocol architecture was not re-audited wholesale.
+- Guidance: current project map, contribution/review routes, documentation/test/series rules, source-seal registry and exception ledgers; `inet-code-review`, `inet-architectural-requirements`, `inet-pull-request-authoring`, and selected C++/OMNeT++/INET review references.
+- The approved accelerated procedure permits labelled source-based parent comparisons, focused per-commit debug checks, combined PR-tip checks and final C41 acceptance. That relaxation is respected; an unexecuted parent is not treated as a failing runtime test.
+
+## Verification inspected and performed
+
+- Independently compared each C06/C08–C14 `src` tree to its approved ordering-probe tree. All eight comparisons are exact. Independently compared **79 per-cut changed `.test` blobs** to the corresponding probe; every blob matches. Exact hashes are in `independent-c06-c14-projection.json`.
+- C06's tested candidate differs from its committed tree only in four reviewer Markdown files. C07 changes no `src`, `.test`, feature declaration or executable example input. C12 changes only three occurrences of one constant identifier; its retained reverse-token proof matches the parent exactly.
+- C06's feature declaration differs from its donor only by the approved Mobility core requirement and PingApplication requirement on each leaf. All three feature entries arrive with their actual code/NED/example consumers.
+- Every applicable behavior commit retains its assigned unit/module/protocol tests and reviewer explanation. C09/C10's representation/codec helpers precede C11's production connection; C13 folds the byte-wide enum fix into generic registration representation, avoiding the unsafe intermediate; C14 adds only the address-validity query before its later policy consumers.
+- Inspected retained command/result records for C06, C07, C08–C14, PR04/PR05/PR06 combined checks, and PR04's off/core matrix. Recorded U/M/P commands exit0 and selected results are nonempty PASS. C06 records both builds, 11 units, 65 modules/87 runs, five native protocol fixtures/11 runs and two generic protocol controls. Native protocol execution is explicitly debug-only. Expected module program errors remain separate from normal completions. The minimal-closure direct examples have the separate checkout-resolution gap below; their zero exits do not validate the intended prefix.
+- C07 records six independently checked captures, fresh global-vector equality, an isolated pinned reference build and the separate elided-EUI comparison **FAIL** at offsets16/32. The relocation-error attempt is retained as infrastructure failure, not protocol evidence. The passing reproduction of the characterized output is not substituted for normative agreement.
+- C07's `features.md` expressly describes standards capabilities, not implementation or achieved test depth. Its wider context/NHC/mesh/ND/recovery rows do not overclaim first-release implementation. First-release coverage, encoding selection and release limits are correctly scoped to P0–P7.
+- Checked relative Markdown targets and heading anchors in each changed reviewer/model/example Markdown artifact at its owning C06–C14 cut. The only missing relative target is finding2 at C06. C07 through C14 have no observed missing relative target/anchor in this bounded selection. Immutable external URL reachability was not fetched.
+- No fingerprint-store change and no change under sealed `src/inet/common/packet/` occurs in the range. No new ledger or sealing decision is needed. Existing global findings remain outside this new-cut review and are not reclassified as new defects.
+
+## Not verified and residual limits
+
+**Direct leaf examples require corrected execution.** Root discovered that the inherited `INET_ROOT`/PATH names the original checkout. `run_minimal_features.py` invokes `inet` directly for its three receiving-application examples, so those exits and scalar observations do not prove the intended C06 library/NED cohort. Naming an absolute local `bin/inet` alone is insufficient because the launcher also expands paths through `INET_ROOT`. Root is rerunning the exact C06 leaf closures with both the absolute local launcher and explicit matching `INET_ROOT`/PATH. Retain the old attempt as a wrong-checkout execution, then correct the C06/C07 reviewer, coverage, release and PR03-record claims to the new cohort. Bare core U/M/P closure checks are not invalidated by this direct-launcher issue.
+
+The reviewer independently inspected U/M/P resolution rather than assuming `--load .` was enough: preserved C06 unit/module/protocol Makefiles contain absolute publication include/library paths; their run scripts pass explicit publication NED roots, and actual protocol output confirms those roots loaded. `readelf` on preserved protocol/module binaries shows `libINET_dbg.so` and a publication/src RUNPATH; `ldd` resolves that library to publication/src. The inherited shell has empty `LD_LIBRARY_PATH`; `INET_ROOT` alone does not redirect ELF lookup. Installed `opp_repl/test/opp.py:137–161` derives library/include/NED paths from the explicitly loaded `inet.opp` (`root_folder="."`), then runs named test binaries directly rather than `bin/inet`. The support-library Makefile refers to the same checkout's relative `../../../src`. No `%testprog` override occurs among the selected LoWPAN/shared fixtures. These facts support retaining ordinary U/M/P evidence, while not extending it to direct examples.
+
+The reviewer inspected existing execution evidence rather than launching duplicate simulations. Exact-parent runtime comparisons for C08–C14 remain unexecuted where the manifest says source-based. The protocol implementations' complete normative correctness, all configuration combinations, live external radios, future PR cuts and final C41 campaign are outside this bounded review. PR descriptions have not been published. Source identity and selected PASS results do not establish those broader claims.
+
+The compliance verdict is **documentation and direct-example evidence corrections required**, with no demonstrated new production-code defect. Apply the two prose fixes in the owning cuts, retain an immutable pre-rewrite checkpoint, remap commit identities, and prove executable source/fixture identity before reusing the valid runtime evidence. Replace the affected direct-example claims only after the correctly resolved executions complete.
+
+## Canonical general checklist
+
+The exact canonical item questions are retained below. Verdicts apply to the reconstruction surface described above, not a fresh audit of the unchanged donor implementation. Findings1–2 concern the documentation rules, which are not separate items in this general checklist.
+
+**[QR-DESIGN-MINIMAL] Does the change preserve required behavior with the least complex sufficient mechanism?** PASS — no new production mechanism beyond the approved source slices and three dependency requirements.
+
+**[AR-ORG-CONTRACTS] Does a new interface define a concrete replacement role?** PASS — native/compatibility lower roles and their consuming boundaries stay together at C06.
+
+**[AR-ORG-CONTRACTS] Do substitutable implementations preserve the contract's declared outcomes?** PASS — implementation/contract source identities match the approved cohort; no reconstruction outcome change.
+
+**[PR-SPLIT-ONE-CHANGE / PR-SPLIT-SIZE] Does a commit hold a part that can stand alone?** PASS — approved representation/consumer split is preserved; C06's body explains coupled composition and its extracted C05 helpers.
+
+**[PR-SPLIT-PREPARE] Does preparation come before the change that needs it?** PASS — wire/chain helpers precede C11; safe generic enum representation is folded into C13; address-validity API precedes policy consumers.
+
+**[PR-MSG-BODY / PR-MSG-WHY] Does a substantial commit explain itself?** PASS — each behavior body explains its need and mechanism; source-based comparisons are identified.
+
+**[PR-MSG-SUMMARY] Does a commit body start with a summary?** PASS — old capability/limitation and resulting behavior are distinguishable in the reviewed summaries.
+
+**[PR-MSG-FACTS] Does a commit message describe only the final change?** PASS — original execution logs are separated from the reconstructed message claims.
+
+**[PR-REQ-STORY] Does a pull request description answer the reviewer's questions up front?** N/A — no published PR description is in this review scope.
+
+**[AR-ORG-CONTRACT-PURITY] Does a contract header declare anything that is not part of the role?** PASS — reviewed ILowpanMac/ILowpanLink declarations retain concrete role queries/preparation and pure virtual operations.
+
+**[AR-ORG-VIS-SPLIT] Does protocol/model code contain visualization or instrumentation logic?** N/A — reconstruction adds no such code beyond the unchanged donor source.
+
+**[AR-ORG-KERNEL] Does the change reimplement or patch an OMNeT++ kernel facility inside INET?** N/A — no reconstruction kernel change.
+
+**[AR-MOD-COMPOSITION] Is new behavior added by composition, or by inheritance / a growing god-module?** PASS — approved native NIC/domain/boundary/adaptation composition is retained; no additional reconstruction owner is introduced.
+
+**[AR-COM-SOCKETS] Does a new application talk to a transport protocol via raw messages?** N/A — no new application implementation in this cut reconstruction.
+
+**[AR-COM-DIRECT] Is a zero-time message standing in for a required direct call?** PASS — no scheduling/direct-call substitution is introduced by reconstruction.
+
+**[AR-COM-NOTIFY] Is a behavior-driving signal really an independent notification?** PASS — source and fixture notification paths remain identical to the approved cohort.
+
+**[AR-OBS-SIGNALS] Can attaching an observer change modeled behavior?** PASS — no observer contract or hook semantics changed by reconstruction; original assertions remain present.
+
+**[AR-OBS-NED-TRUTH] Does prose/code duplicate what a NED declaration owns?** PASS — feature-dependency corrections match actual consumers; the capability prose issue is reported under DR-WHAT-IS rather than inventing a parameter-ownership violation.
+
+**[AR-OBS-INTROSPECTION] Does a new protocol ship its introspection support?** PASS — chunk, serializer, dissector and printer slices remain assigned with their relevant representation changes.
+
+**[AR-CFG-INFER / QR-DUP] Is a derivable fact restated instead of inferred?** PASS — no extra runtime configuration or duplicated state is introduced by reconstruction.
+
+**[QR-OBJECT-OWNERSHIP] Does each object follow its declared ownership model on every supported path?** PASS — no ownership code differs from the intended cut; lifecycle/fragment ownership controls remain with the native behavior.
+
+**[AR-CFG-PARAMS] Are new parameters/fields well-formed?** PASS — declarations and consumers retain their approved same-cut versions; no forward parameter dependency observed.
+
+**[AR-EXT-REUSE] Does each new mechanism need to exist?** PASS — no cleanup-specific mechanism persists in production code.
+
+**[AR-EXT-NOCORE] Does adding a protocol require editing core code?** PASS — sealed packet source remains unchanged; generic ND support stays generic before its optional consumer.
+
+**[AR-EXT-MINIMAL-SURFACE] Is a new member more visible than its callers need?** PASS — reconstruction adds no visibility expansion; C14's query role has explicit later C20/C22 consumers.
+
+**[AR-EXT-VIRTUAL-IS-A-PROMISE] Is a new virtual a stated extension point?** PASS — no new virtual beyond the approved interface/module roles is added by reconstruction.
+
+**[AR-BUILD-DECLARATIVE] Are build values hardcoded?** PASS — machine-specific artifact locations are evidence metadata; production build descriptors gain no machine-specific value.
+
+**[RR-NUMERIC-STABLE] Is an externally exposed enum value or named numeric code explicitly assigned?** PASS — C13 preserves assigned wire values and fixes the option enum's underlying byte representation in the same cut.
+
+**[AR-QUAL-NAMING] Do new NED/`.msg`/semantic names follow the conventions?** PASS — required C12 constant rename is isolated and reverse-proven; no reconstruction rename drift was found.
+
+**[AR-QUAL-LOGGING] Is a programming error logged instead of thrown?** PASS — reconstruction introduces no change in invariant/error handling.
+
+**[AR-QUAL-DETERMINISM] Does simulation logic depend on non-deterministic sources or pointer ordering?** PASS — no reconstruction change to deterministic model inputs/order; host timestamps are diagnostic evidence only.
+
+**[AR-QUAL-TESTS] Does the change ship with tests matching its nature?** PASS — assigned helper, production module and native protocol assertions ship in owning behavior commits; all compared fixture blobs match.
+
+**[AR-QUAL-TRACEABILITY] Does a commit that moves a recorded expectation explain the movement?** N/A — no stored baseline changes.
+
+**[AR-QUAL-DISPLAY] Does a new module have a distinguishing icon?** PASS — NED/default composition is preserved exactly; reconstruction adds no icon-less module type.
+
+REVIEW: 29 PASS, 5 N/A, 0 FLAG, 0 QUESTION

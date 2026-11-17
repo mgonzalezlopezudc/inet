@@ -1,0 +1,296 @@
+[
+  {
+    "original_path": "doc/project/evidence/model/6lowpan/completion.md",
+    "snapshot": "doc/project/evidence/model/6lowpan/publication/input-snapshots/completion.md.txt",
+    "input_blob": "db1c22dbb45578c6748ef3dd97c6f2cca38e7a0a",
+    "sha256": "9c1c921f1bb8dbe38d090b629420ab14ab3d2c3ca4ddda7214fb9f5e931b2e75"
+  },
+  {
+    "original_path": "doc/project/evidence/model/6lowpan/coverage.md",
+    "snapshot": "doc/project/evidence/model/6lowpan/publication/input-snapshots/coverage.md.txt",
+    "input_blob": "e5a2695608b889acd7947ac50fb6e09f099bc660",
+    "sha256": "fe70ea417f9a515df334389c7a1bd3be8dca0abdc2a30cd6df550294f430e072"
+  },
+  {
+    "original_path": "doc/project/evidence/model/6lowpan/encoding-profile.md",
+    "snapshot": "doc/project/evidence/model/6lowpan/publication/input-snapshots/encoding-profile.md.txt",
+    "input_blob": "201a326f3840136c0bc868a5cd2191a37e98032b",
+    "sha256": "e62f3791577c4a3255af3852e5cdbaf472b19a8569a702eebf446e382edcb3c3"
+  },
+  {
+    "original_path": "doc/project/evidence/model/6lowpan/errata-20261115.json",
+    "retained_path": "doc/project/evidence/model/6lowpan/errata-20261115.json",
+    "input_blob": "47b01bc178e1610b425001ffffe07a0f480ab7a4",
+    "sha256": "e080d5c24e0fa8183be0ae3f0242f4a6cfec785a695ab7b1b525eea223d31140"
+  },
+  {
+    "original_path": "doc/project/evidence/model/6lowpan/final-verification.json",
+    "retained_path": "doc/project/evidence/model/6lowpan/final-verification.json",
+    "input_blob": "ed48e34d3b00e69ceba52032f71cb4d8220cae7b",
+    "sha256": "167c442b8be9a4eb048cf42fdcd307afe2cceaaf661b3f45b327bb141a08f367"
+  },
+  {
+    "original_path": "doc/project/evidence/model/6lowpan/ipv6-validity-verification.json",
+    "retained_path": "doc/project/evidence/model/6lowpan/ipv6-validity-verification.json",
+    "input_blob": "7dca96bdaab5811096e30f12f6b02048283282de",
+    "sha256": "992a2d73070cf91c60156bb17cad9eabfa53dd1e31ac6301611ba5c43cf06cd7"
+  },
+  {
+    "original_path": "doc/project/evidence/model/6lowpan/link-contract.md",
+    "snapshot": "doc/project/evidence/model/6lowpan/publication/input-snapshots/link-contract.md.txt",
+    "input_blob": "f62c4122a52c7cb568b563b2529bcb7da49af101",
+    "sha256": "08dec1427991cf3d51f0a84b4149fe7413b2424f825741bf25c4f6799cc0e4c1"
+  },
+  {
+    "original_path": "doc/project/evidence/model/6lowpan/native-capture.tsv",
+    "retained_path": "doc/project/evidence/model/6lowpan/native-capture.tsv",
+    "input_blob": "3ccb5d2371e630c2bab468a6ee959b7ea4aff34c",
+    "sha256": "d3acdf24c4ef4a297b4503e75e3db0957066011a6d73e1860e78f5a78c7a8c4c"
+  },
+  {
+    "original_path": "doc/project/evidence/model/6lowpan/native-udp-capture.tsv",
+    "retained_path": "doc/project/evidence/model/6lowpan/native-udp-capture.tsv",
+    "input_blob": "3b7d1102ce0a0a0c2bfccb39601e63a412683370",
+    "sha256": "14aaa23600e8f63667cded4e36abbbb778d2c4eb68445c0031bc797d63386151"
+  },
+  {
+    "original_path": "doc/project/evidence/model/6lowpan/nd-option-values-verification.json",
+    "retained_path": "doc/project/evidence/model/6lowpan/nd-option-values-verification.json",
+    "input_blob": "87ed9bccdc9e156fed89fe9687cc168b895c7a16",
+    "sha256": "063b654b5551435b44fcd50655535e7ff1555ef44907a18f6ca3f31bfcf12541"
+  },
+  {
+    "original_path": "doc/project/evidence/model/6lowpan/nd-wire-verification.json",
+    "retained_path": "doc/project/evidence/model/6lowpan/nd-wire-verification.json",
+    "input_blob": "eac5821d9047d811aff7e0accd906aa27e80b970",
+    "sha256": "e56a8ab9e0dcfed31039e9e6eb0a9927f2247277a3c715498fa8a165a6dac4a5"
+  },
+  {
+    "original_path": "doc/project/evidence/model/6lowpan/nd-wire.md",
+    "snapshot": "doc/project/evidence/model/6lowpan/publication/input-snapshots/nd-wire.md.txt",
+    "input_blob": "d91c0c4fbed7b257f4fb6629ebff8cee7f469015",
+    "sha256": "ef6fa4d085bf8d828f30719b0396ba75753f60f6145cc39d66e9d5550e7de579"
+  },
+  {
+    "original_path": "doc/project/evidence/model/6lowpan/p1-contract.md",
+    "snapshot": "doc/project/evidence/model/6lowpan/publication/input-snapshots/p1-contract.md.txt",
+    "input_blob": "a62e50fa85d66f74157db8ab9a5aeca9e04b7822",
+    "sha256": "185b017f2d30e995a1a73a7b3e19947ccc9c03788dbb8558e940db6c46bb2ad6"
+  },
+  {
+    "original_path": "doc/project/evidence/model/6lowpan/p10-authority-validity-verification.json",
+    "retained_path": "doc/project/evidence/model/6lowpan/p10-authority-validity-verification.json",
+    "input_blob": "f746490658c6c94f47831dbdb7351fb5505a2bd7",
+    "sha256": "7597082ac3d773feff055b797dfe1724d73faf4510c049c0fba8de9cdf92e0c3"
+  },
+  {
+    "original_path": "doc/project/evidence/model/6lowpan/p10-authority-verification.json",
+    "retained_path": "doc/project/evidence/model/6lowpan/p10-authority-verification.json",
+    "input_blob": "ea5ab99b63f6cefbf6d096468521ee545901b3b3",
+    "sha256": "8b419f1708a2166c21bebd467f4995e691ca6636803d0250bc8034a6333454b8"
+  },
+  {
+    "original_path": "doc/project/evidence/model/6lowpan/p10-border-router-verification.json",
+    "retained_path": "doc/project/evidence/model/6lowpan/p10-border-router-verification.json",
+    "input_blob": "78915a0c389e605ba655d7eafe86c84329bd7ff4",
+    "sha256": "316ed70a89559869a04c8be7f21153e7f5f907785b7dbc85db62a1c0b097e6ba"
+  },
+  {
+    "original_path": "doc/project/evidence/model/6lowpan/p10-context-verification.json",
+    "retained_path": "doc/project/evidence/model/6lowpan/p10-context-verification.json",
+    "input_blob": "06c948fedca56d11a7c69237b0d05a1a9aeffb55",
+    "sha256": "233ae6115b1addece879fe3c99925bb1ea8b62729a882272b4903b7a79d1f856"
+  },
+  {
+    "original_path": "doc/project/evidence/model/6lowpan/p10-discovery-compression-verification.json",
+    "retained_path": "doc/project/evidence/model/6lowpan/p10-discovery-compression-verification.json",
+    "input_blob": "31c0e8a365333fc1887527181acfe9daf96289fc",
+    "sha256": "07692b604140113f6c2acf963b19c5ed3863dd23c13a7b46026c45747604a16a"
+  },
+  {
+    "original_path": "doc/project/evidence/model/6lowpan/p10-host-retry-verification.json",
+    "retained_path": "doc/project/evidence/model/6lowpan/p10-host-retry-verification.json",
+    "input_blob": "50502f945ec9ad71063a5abdb3004e3b33315939",
+    "sha256": "3f45ed981a2ea000b869a3a4cc734277bb02653e3ad9436878bcdd7929e4ce58"
+  },
+  {
+    "original_path": "doc/project/evidence/model/6lowpan/p10-host-verification.json",
+    "retained_path": "doc/project/evidence/model/6lowpan/p10-host-verification.json",
+    "input_blob": "c045a0d1ec66b5b2a2e80217c598ba8ac64f4ad2",
+    "sha256": "6ac3f6bfa64d3da4d6fc0fcf0bb5151630bea738d0c85768cee50113196ac047"
+  },
+  {
+    "original_path": "doc/project/evidence/model/6lowpan/p10-native-ns-verification.json",
+    "retained_path": "doc/project/evidence/model/6lowpan/p10-native-ns-verification.json",
+    "input_blob": "6f60db723167e6720f8c04df1a3d998c5744ba0b",
+    "sha256": "1725290a8699fcdf51d8aed202f03357caed45fc3fe665a40c48de56fa670bba"
+  },
+  {
+    "original_path": "doc/project/evidence/model/6lowpan/p10-nd-wire-validation-verification.json",
+    "retained_path": "doc/project/evidence/model/6lowpan/p10-nd-wire-validation-verification.json",
+    "input_blob": "9a24e61187a4f2e166599293de1b4761fa117702",
+    "sha256": "0f3fb351834eaeff929030ffe8135125b3c84de5a0ac85e4350c2b9db6c43f37"
+  },
+  {
+    "original_path": "doc/project/evidence/model/6lowpan/p10-registrar-validity-verification.json",
+    "retained_path": "doc/project/evidence/model/6lowpan/p10-registrar-validity-verification.json",
+    "input_blob": "c43423878eddd9e5c9d666463e8bbcaa5734a372",
+    "sha256": "ff3197f3684dee1ce19834cd7b55c9d4a795912f709cb87eb803664cc46e0ec7"
+  },
+  {
+    "original_path": "doc/project/evidence/model/6lowpan/p10-relay-verification.json",
+    "retained_path": "doc/project/evidence/model/6lowpan/p10-relay-verification.json",
+    "input_blob": "a5957fd5656ebe2688a93a989a7d3de53cff1802",
+    "sha256": "250f10632c98ec9bb1acbf0e207e72ab31675dc75028fc4508d0e4d9c6509ae0"
+  },
+  {
+    "original_path": "doc/project/evidence/model/6lowpan/p10-router-verification.json",
+    "retained_path": "doc/project/evidence/model/6lowpan/p10-router-verification.json",
+    "input_blob": "a15bc522dc82639c6c16f85327616d94194c34c3",
+    "sha256": "ed7c5a5092bbc70c6fab47fe35c9d386c35f2934e220ac67a29e569e839a8b86"
+  },
+  {
+    "original_path": "doc/project/evidence/model/6lowpan/p10-stage1-verification.json",
+    "retained_path": "doc/project/evidence/model/6lowpan/p10-stage1-verification.json",
+    "input_blob": "82d878b24424843950854cae7a33e83cb6f36cb1",
+    "sha256": "fa0be300645da586be50315e12eb79d08a645add6062af54a064e0d44b5f578c"
+  },
+  {
+    "original_path": "doc/project/evidence/model/6lowpan/p11-host-verification.json",
+    "retained_path": "doc/project/evidence/model/6lowpan/p11-host-verification.json",
+    "input_blob": "2dafdf4c674932dcffcfb5e922d60aa4073af13b",
+    "sha256": "a7a3bfa0ac70f0018893383bcaa49f8550dd2284ffa73a1a6f2b1680212cd109"
+  },
+  {
+    "original_path": "doc/project/evidence/model/6lowpan/p11-moved-flags-verification.json",
+    "retained_path": "doc/project/evidence/model/6lowpan/p11-moved-flags-verification.json",
+    "input_blob": "b7efac60b8ab4a69847c3a48d7f313b72ecf8949",
+    "sha256": "715faef07460746826979e5aec3d1c6fcbf0374ce842ec79c64f7dfffb4c2782"
+  },
+  {
+    "original_path": "doc/project/evidence/model/6lowpan/p11-registrars-verification.json",
+    "retained_path": "doc/project/evidence/model/6lowpan/p11-registrars-verification.json",
+    "input_blob": "7b93f5f420dec6c4f1628f14baa6734bcdec83f7",
+    "sha256": "941662e48dacbddb64b6dfdd3324d41c8bc0be90ecce81bdb7f5e3e2bb7a0f65"
+  },
+  {
+    "original_path": "doc/project/evidence/model/6lowpan/p11-source-validity-verification.json",
+    "retained_path": "doc/project/evidence/model/6lowpan/p11-source-validity-verification.json",
+    "input_blob": "8a020d76efacd4e0e0d924af49fd197369759d13",
+    "sha256": "976372516de65470e0cf6960d359c309ff2532021efd1354a0ffcf3c14d660b6"
+  },
+  {
+    "original_path": "doc/project/evidence/model/6lowpan/p12-mesh-verification.json",
+    "retained_path": "doc/project/evidence/model/6lowpan/p12-mesh-verification.json",
+    "input_blob": "595e0cda97865faba4f4d18321d0f0e26f57e9cd",
+    "sha256": "8e37cad11804c2abeccacb14a507a5a445679702fe9f06b6e023677721f17a11"
+  },
+  {
+    "original_path": "doc/project/evidence/model/6lowpan/p13-paging-verification.json",
+    "retained_path": "doc/project/evidence/model/6lowpan/p13-paging-verification.json",
+    "input_blob": "3bc4b4c3682a069eba581d1f5f89b3e062aba498",
+    "sha256": "8f78aed90c1aee9ec3edd78ce18f26adae9a8b94d4016b6d63cb13076eddb900"
+  },
+  {
+    "original_path": "doc/project/evidence/model/6lowpan/p14-mtu-verification.json",
+    "retained_path": "doc/project/evidence/model/6lowpan/p14-mtu-verification.json",
+    "input_blob": "6b13c9121829e99e16e27102e8e66f4fb7a4f1f5",
+    "sha256": "3bf6b1fe62dbee25fd0cc4c73370cb567d9edc0a6df27a40050cd98372b79fe7"
+  },
+  {
+    "original_path": "doc/project/evidence/model/6lowpan/p14-native-completion-verification.json",
+    "retained_path": "doc/project/evidence/model/6lowpan/p14-native-completion-verification.json",
+    "input_blob": "2522126821992eda932a2a4377685e3239e53d60",
+    "sha256": "759b678394e6d7b02e33573b61376b9d1b3af07c6076dd74d38edbd46f1d47a0"
+  },
+  {
+    "original_path": "doc/project/evidence/model/6lowpan/p14-paced-source-verification.json",
+    "retained_path": "doc/project/evidence/model/6lowpan/p14-paced-source-verification.json",
+    "input_blob": "6a7c8d60e59cb4bb105f827ef68b242e79a71067",
+    "sha256": "edf36f52863133d1d1321964e96028e6d9c3b4cbba4e4be2186aebf808fed789"
+  },
+  {
+    "original_path": "doc/project/evidence/model/6lowpan/p14-vrb-verification.json",
+    "retained_path": "doc/project/evidence/model/6lowpan/p14-vrb-verification.json",
+    "input_blob": "b0d4813f9b7affa5c36422865def1f8ebe73701b",
+    "sha256": "525f10de189209dd21523ff6332e2d3a2beb9c013e77c3c6c3136d624c57ca75"
+  },
+  {
+    "original_path": "doc/project/evidence/model/6lowpan/p15-selective-recovery-verification.json",
+    "retained_path": "doc/project/evidence/model/6lowpan/p15-selective-recovery-verification.json",
+    "input_blob": "71bfcef19809a6d08e2179b3ee2f438a9995842e",
+    "sha256": "97a99bfa05c3088a56067f3b036549575a601de9c47eea39707eba274983fb2a"
+  },
+  {
+    "original_path": "doc/project/evidence/model/6lowpan/p7-closure.json",
+    "retained_path": "doc/project/evidence/model/6lowpan/p7-closure.json",
+    "input_blob": "ae16e540aca6970d10e709ca1b7cabeb585de61b",
+    "sha256": "84a7875860b476f42b8b6a2d1b33b4b3dffd59e08d34f4ba2beecb94709c473d"
+  },
+  {
+    "original_path": "doc/project/evidence/model/6lowpan/p8-verification.json",
+    "retained_path": "doc/project/evidence/model/6lowpan/p8-verification.json",
+    "input_blob": "c316a0e676e3d375ace8e9b36bcd66ab9d7f56a4",
+    "sha256": "efa7e240eecda5926a146dcc8ba006876e6bb8ed2c075b49c6efdc930e2ca449"
+  },
+  {
+    "original_path": "doc/project/evidence/model/6lowpan/p9-verification.json",
+    "retained_path": "doc/project/evidence/model/6lowpan/p9-verification.json",
+    "input_blob": "ace689c1ac583c2932ed8b48b514aec0f9ac1572",
+    "sha256": "47db36a5538c7f84acc2b8a9e3b10cc4e63b533ddfe78d65c684ac4cb8758164"
+  },
+  {
+    "original_path": "doc/project/evidence/model/6lowpan/peer-elided-result.json",
+    "retained_path": "doc/project/evidence/model/6lowpan/peer-elided-result.json",
+    "input_blob": "21f36f430df736daeb243d5357db83e12d07c2cd",
+    "sha256": "99a53a476aceb723438da94f7f516796313c6fdbe9dfdfa086e85181672eb642"
+  },
+  {
+    "original_path": "doc/project/evidence/model/6lowpan/provenance.md",
+    "snapshot": "doc/project/evidence/model/6lowpan/publication/input-snapshots/provenance.md.txt",
+    "input_blob": "112d364937514c3932c4e0ae92805c97ddbe6752",
+    "sha256": "1eeefc54952b402db3f16abb5162da715cb4e0a87852ee069957d7d2acb38994"
+  },
+  {
+    "original_path": "doc/project/evidence/model/6lowpan/release-captures.tsv",
+    "retained_path": "doc/project/evidence/model/6lowpan/release-captures.tsv",
+    "input_blob": "51e7062b5f145c92cc557184f45f677a9e6d2221",
+    "sha256": "16521b4c4c15a22ec938eb5ec587cc6440c8c0db4fedfd02a79cecdc99598eea"
+  },
+  {
+    "original_path": "doc/project/evidence/model/6lowpan/release-validation.md",
+    "snapshot": "doc/project/evidence/model/6lowpan/publication/input-snapshots/release-validation.md.txt",
+    "input_blob": "926325b9193dc650e46e6ec0db230eabafeff113",
+    "sha256": "86966ee3f5daa8d6ee172faf66d641c7e5df52fb698150b182d7edfed27a12cf"
+  },
+  {
+    "original_path": "doc/project/evidence/model/6lowpan/release-verification.json",
+    "retained_path": "doc/project/evidence/model/6lowpan/release-verification.json",
+    "input_blob": "7d570090bbd0edd0508d1134d674c75de3e6d4f8",
+    "sha256": "2247002bc33fdd0ccdc2092bce8fa077bbf913c7cb42c46e56a1f245e79fa1d3"
+  },
+  {
+    "original_path": "doc/project/evidence/model/6lowpan/source-hashes.sha256",
+    "retained_path": "doc/project/evidence/model/6lowpan/source-hashes.sha256",
+    "input_blob": "797d0d5f0e9ee9c095cf172a3bc89a532ef89ce5",
+    "sha256": "7130da7fc2fcc398b8e33ff44ba41c82c74a7bc2f571301bbeb474cd38c1b5e1"
+  },
+  {
+    "original_path": "plan/done/6lowpan-completion.md",
+    "snapshot": "doc/project/evidence/model/6lowpan/publication/input-snapshots/6lowpan-completion.md.txt",
+    "input_blob": "14c2bc3f4b6b40d112ccedf59b4b9cbe88d17349",
+    "sha256": "af5bfc8b3af7b079c4d2690998899b6ff3548fb1cf9d2827ceef16b8f1e95176"
+  },
+  {
+    "original_path": "plan/done/6lowpan-implementation-plan.md",
+    "snapshot": "doc/project/evidence/model/6lowpan/publication/input-snapshots/6lowpan-implementation-plan.md.txt",
+    "input_blob": "437d7d91b6859b7331f1c5aa48189aa373672657",
+    "sha256": "c3df412da2253a8c70f60ca97bf88d26fbb915430c4d8911bb1a67f403157307"
+  },
+  {
+    "original_path": "plan/pending/6lowpan-initial-plan.md",
+    "snapshot": "doc/project/evidence/model/6lowpan/publication/input-snapshots/6lowpan-initial-plan.md.txt",
+    "input_blob": "a7b363d8cc4c75d87fd59805e573054575265e9e",
+    "sha256": "99fa5710bb6a1197d3337bdc64d23d77a40c3199a05ce3552ee0c456399bf444"
+  }
+]

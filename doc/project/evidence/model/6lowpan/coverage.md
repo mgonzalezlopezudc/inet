@@ -1,23 +1,24 @@
-# First-release 6LoWPAN coverage
+# 6LoWPAN implementation coverage
 
-> **Kind:** ledger · **Status:** current · **Seal:** none · **Owns:** — · **Stands on:** [publication plan](../../../../../plan/pending/6lowpan-publication-plan.md), [features](../../protocol/6lowpan/features.md)
+> **Kind:** ledger · **Status:** current · **Seal:** none · **Owns:** — · **Stands on:** [publication plan](../../../../../plan/pending/6lowpan-publication-plan.md), [standards capabilities](../../protocol/6lowpan/features.md)
 
-This publication prefix implements original P0–P7. The standards capability map also lists later packages; those rows do not imply implementation here. [PR03 verification](publication/pr03-verification.json) identifies the tested C06 model, source/configuration/library hashes, exact commands and retained outputs.
+The selected implementation covers original P0–P15 through the publication cuts below. [Publication verification](publication/manifest.json) identifies every actual commit/review tip, its original source commitments, focused and combined checks, final acceptance and preserved limitations. Historical input records retain their original source/library identities; they are not executions of the reconstructed series.
 
-| Contract | Direct evidence at C06 |
-| --- | --- |
-| P0/P1 identity, lower boundaries and legacy indications | Four legacy module fixtures, native address/frame vectors and native receive matrix. |
-| P2/P3 bounded dispatch, fragmentation and reassembly | Native fragmentation/reassembly units; production receive, sender-boundary, identity, restart and tag-guard protocol fixtures. |
-| P4/P5 stateless IPHC and carried-checksum UDP NHC | Codec units and receive matrices; computed-checksum native UDP and route-over module runs. |
-| P6 native link service and 1280-byte IPv6 composition | Real native queue/MAC/radio sender tests, six independently decoded captures, native identity and FCS checks. |
-| P7 selected-profile acceptance | 11 unit fixtures, 65 module fixtures/87 runs, five native protocol fixtures/11 runs, two generic IPv6 protocol fixtures; exact minimal core and both application leaves. |
+| Original contract | Publication owner | Direct evidence |
+| --- | --- | --- |
+| P0/P1 standards, profile and receive boundaries | C00, PR01–PR03 | Standards catalogs, generic IPv6 controls, legacy metadata modules, native address/frame vectors and receive matrix. |
+| P2–P7 native IPv6 data plane | PR03 | Dispatch, IPHC/UDP NHC and fragment units; five native protocol fixtures for radio boundaries, byte-only reassembly, identity, restart and tag guards; six independently decoded captures and global-address vectors. |
+| P8 stateful IPHC | PR04 | Context unit/protocol vectors for CID, prefixes, multicast, permission, validity and partial-reassembly snapshots. |
+| P9 extension and nested-IPv6 NHC | PR05 | Wire/chain units and production transmission/reconstruction, malformed input and first-fragment fallback. |
+| P10 discovery, legacy registration, authority, relay and contexts | PR06–PR10 | Generic wire/validity units; literal-peer and real native/routed fixtures for local responders, automatic hosts, deadlines, ownership and authoritative propagation. |
+| P11 updated registrar and host transactions | PR06, PR11–PR12 | Identity/TID comparison, registrar races, unsolicited Moved correction, common source guard, host registration and lifecycle fixtures. |
+| P12 mesh-under | PR13 | Mesh/BC0 wire units and multihop identity, hop/duplicate, fragment, resource and lifecycle observations. |
+| P13 paging/ESC | PR14 | Packet-local parser/wire vectors, endpoint interpretation and opaque mesh transit. |
+| P14 completion, source pacing and virtual forwarding | PR15–PR16 | Twenty completion-module cases, real ACK-relative pacing, early forwarding/fallback, lifecycle/resource bounds and original-size/actual-MTU refusal and cancellation. |
+| P15 selective recovery | PR17 | Partition/tag/wire units; three protocol fixtures for bounded source/relay/receiver behavior, repair, ACK validation, raw no-UDP operation, copied ownership and eight-link timing bounds. |
 
-Both compilation modes pass; native protocol executions above use debug. Expected errors in 17 module runs are recorded separately from 70 normal completions. The core required-feature closure excludes UDP and both application leaves. Feature-off shared controls and stored NIC fingerprints are separate regression evidence.
+The final debug campaign executes 22 unit fixtures, 69 module fixtures/110 runs and 35 protocol fixtures/287 runs, including the two new generic IPv6 checks. Declared program-error cases remain separate from normal completions. Targeted release execution compares 393 unconditional observation rows; release assertions are disabled.
 
-The native profile is unsecured same-PAN IEEE 802.15.4 at 250 kbit/s, extended unicast and short broadcast, stationary radios and a dedicated medium, static IPv6 neighbors, and MTU 1280. See [encoding choices](encoding-profile.md) and [link contract](link-contract.md). Contexts, extension NHC, optimized ND, mesh, paging and recovery belong to later review units.
+Feature-off and actual UDP-disabled checks are distinct from normal enabled tests. Required-feature closures are verified with their exact enabled IDs and local library/NED roots. [Release validation](release-validation.md) and its linked records own the actual selections, counts and limits.
 
-Capture decoding and serialized global-address vectors are bounded evidence. They do not establish live external-radio interoperability or every standardized encoding. The external fully elided-EUI comparison fails at the two IID U/L-bit positions; the normative INET mapping is retained.
-
-## Publication through C29
-
-At the PR10/C29 checkpoint, P8 stateful contexts, P9 extension/nested-IPv6 NHC and the selected P10 legacy registration/discovery/authority/relay/context-distribution profile are implemented. Their fixtures and companion explanations ship with their owning commits C08–C29. The publication verification manifest identifies each exact review tip and its executed scope; no later updated-host, mesh, paging or recovery behavior is inferred for this checkpoint. The first-release tables above remain the bounded C06/P0–P7 acceptance account.
+This is a bounded simulation implementation. Native operation uses the selected unsecured same-PAN IEEE 802.15.4 profile at 250 kbit/s. See NED declarations, the user guide and [encoding contract](encoding-profile.md) for configuration and supported forms. Association, link security, AP-ND, backbone federation, RPL signaling and unimplemented external payload families are outside the selected profiles. Serialized external vectors do not establish live external MAC/radio interoperability; the fully elided-EUI mismatch remains a failed comparison.

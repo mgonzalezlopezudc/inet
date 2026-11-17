@@ -1,8 +1,10 @@
-# 6LoWPAN first-release encoding profile
+# 6LoWPAN base IPHC and NHC encoding profile
 
-> **Kind:** design · **Status:** draft · **Seal:** none · **Owns:** — · **Stands on:** [RFC 6282 catalog](../../standard/rfc6282/catalog.md)
+> **Kind:** design · **Status:** current · **Seal:** none · **Owns:** — · **Stands on:** [RFC 6282 catalog](../../standard/rfc6282/catalog.md)
 
-This records the P0 stateless selection, optional P8 contexts and P9 extension NHC. Execution evidence is kept separately from this encoding contract. Inline fields follow RFC 6282 order. Decode accepts legal supported encodings even when encode would choose a smaller representation. Missing bytes fail before any read beyond input.
+This records the implemented stateless IPHC, optional stateful contexts and extension NHC encoding contract. Execution evidence is kept separately in the [coverage](coverage.md) and [completion](completion.md) ledgers. Inline fields follow RFC 6282 order. Decode accepts legal supported encodings even when encode would choose a smaller representation. Missing bytes fail before any read beyond input.
+
+These codec selections apply within the calling profile. Discovery suppresses context use, while virtual fragment forwarding emits outer-only inline-NH IPHC or the configured uncompressed dispatch. Selective recovery uses its separate contextless outer-only IPHC profile and compressed-byte coordinates. The [completion ledger](completion.md) records these additional policies; they do not change the base encoding tables below.
 
 | Field | Encoder selection | Decoder acceptance |
 | --- | --- | --- |
@@ -12,7 +14,7 @@ This records the P0 stateless selection, optional P8 contexts and P9 extension N
 | TF=11 | Traffic class and flow label both zero | Reconstruct both zero |
 | HLIM=00 | Hop limit other than 1, 64, 255 | Any inline octet, including those three values |
 | HLIM=01/10/11 | Hop limit 1/64/255 respectively | Same fixed values |
-| NH=0 | P4: every next header; P5: every non-UDP or fallback header | Inline next-header octet, including extension headers |
+| NH=0 | Inline next header when NHC is unselected, unsupported or cannot fit the first-fragment budget | Inline next-header octet, including extension headers |
 | NH=1 | Supported contiguous NHC chain that fits FRAG1 | UDP, extension EIDs 0–4 and nested IPv6 EID 7; reserved EIDs reject |
 | CID=0 | Default when both selected context IDs are zero or unused | Use context 0 only for context-dependent fields; ignore unused selectors |
 | CID=1 | P8: nonzero selected SCI and/or DCI | Consume the extension byte; source and destination lookups are independent; missing/expired required contexts reject |
@@ -47,6 +49,7 @@ infers length from uncompressed coverage. C=1 is rejected without integrity supp
 
 Extension EIDs 0–4 represent Hop-by-Hop, Routing, Fragment, Destination and Mobility. NH=0 carries the original next-header octet; NH=1 continues the NHC chain. General length counts compressed body octets and cannot exceed 255. Fragment has seven body bytes and no length field. One trailing Pad1/PadN of at most seven bytes can be removed from Hop-by-Hop/Destination; decoding restores alignment to eight bytes. Nested EID 7 requires NH=0 followed by IPHC. Its elided IIDs copy the enclosing IPv6 addresses' last 64 bits without another U/L inversion. Codec and structural dissector recursion is bounded at sixteen levels.
 
-If a compressed header cannot fit FRAG1, reduce the compressed chain or select
-LOWPAN_IPV6, recompute original-byte coverage and alignment, and reject only when no
-supported representation fits. Uncompressed extension headers require no NHC support.
+If the complete NHC chain cannot fit FRAG1, retain base IPHC with NH inline.
+Select LOWPAN_IPV6 only when base IPHC cannot fit. Recompute original-byte coverage
+and alignment, and reject only when no supported representation fits. Uncompressed
+extension headers require no NHC support.

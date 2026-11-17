@@ -1,0 +1,218 @@
+{
+  "review_unit": "PR05",
+  "base": "df33b2c2cbb378350b24b56c810794f50ad1da73",
+  "tip": "59c2eee6090d1bdf1078da84fcecc4f2ade65a5e",
+  "publication_commits": [
+    "C09",
+    "C10",
+    "C11",
+    "C12"
+  ],
+  "status": "PASS",
+  "commands": [
+    {
+      "name": "build-debug",
+      "argv": [
+        "make",
+        "MODE=debug",
+        "-j8"
+      ],
+      "cwd": "/home/miguel/workspace/inet-6lowpan-publication",
+      "started": "2026-11-17T08:40:03.921862+01:00",
+      "log": "/home/miguel/workspace/.codex-artifacts/lowpan-publication-20261117/pr05-combined/build-debug.log",
+      "exit_code": 0,
+      "finished": "2026-11-17T08:40:05.286992+01:00"
+    },
+    {
+      "name": "build-release",
+      "argv": [
+        "make",
+        "MODE=release",
+        "-j8"
+      ],
+      "cwd": "/home/miguel/workspace/inet-6lowpan-publication",
+      "started": "2026-11-17T08:40:05.287220+01:00",
+      "log": "/home/miguel/workspace/.codex-artifacts/lowpan-publication-20261117/pr05-combined/build-release.log",
+      "exit_code": 0,
+      "finished": "2026-11-17T08:40:14.761047+01:00"
+    },
+    {
+      "name": "unit-debug",
+      "argv": [
+        "opp_run_unit_tests",
+        "--load",
+        ".",
+        "-p",
+        "inet",
+        "-m",
+        "debug",
+        "--no-build",
+        "--no-concurrent",
+        "-f",
+        "(LowpanExtensionNhcWire|LowpanFragmentation|LowpanIphc|LowpanNhcChains|LowpanReassembly)\\.test$",
+        "--result-file",
+        "/home/miguel/workspace/.codex-artifacts/lowpan-publication-20261117/pr05-combined/unit-debug-result.json"
+      ],
+      "cwd": "/home/miguel/workspace/inet-6lowpan-publication",
+      "started": "2026-11-17T08:40:14.761557+01:00",
+      "log": "/home/miguel/workspace/.codex-artifacts/lowpan-publication-20261117/pr05-combined/unit-debug.log",
+      "library_sha256": "66c8ed1824a04e2d0cdb6bfd66e338e884c48bba7cf1e55119ca546ee1da2c53",
+      "exit_code": 0,
+      "finished": "2026-11-17T08:40:27.492920+01:00"
+    },
+    {
+      "name": "module-debug",
+      "argv": [
+        "opp_run_module_tests",
+        "--load",
+        ".",
+        "-p",
+        "inet",
+        "-m",
+        "debug",
+        "--no-build",
+        "--no-concurrent",
+        "-f",
+        "(LowpanIphcReceiveMatrix|LowpanNativeIpv6Fragment|LowpanPeerReceive)\\.test$",
+        "--result-file",
+        "/home/miguel/workspace/.codex-artifacts/lowpan-publication-20261117/pr05-combined/module-debug-result.json"
+      ],
+      "cwd": "/home/miguel/workspace/inet-6lowpan-publication",
+      "started": "2026-11-17T08:40:27.518443+01:00",
+      "log": "/home/miguel/workspace/.codex-artifacts/lowpan-publication-20261117/pr05-combined/module-debug.log",
+      "library_sha256": "66c8ed1824a04e2d0cdb6bfd66e338e884c48bba7cf1e55119ca546ee1da2c53",
+      "exit_code": 0,
+      "finished": "2026-11-17T08:40:37.758936+01:00"
+    },
+    {
+      "name": "protocol-debug",
+      "argv": [
+        "opp_run_protocol_tests",
+        "--load",
+        ".",
+        "-p",
+        "inet",
+        "-m",
+        "debug",
+        "--no-build",
+        "--no-concurrent",
+        "-f",
+        "(LowpanExtensionNhc|LowpanNativeReassembly)\\.test$",
+        "--result-file",
+        "/home/miguel/workspace/.codex-artifacts/lowpan-publication-20261117/pr05-combined/protocol-debug-result.json",
+        "-w",
+        "^tests/protocol/6lowpan$"
+      ],
+      "cwd": "/home/miguel/workspace/inet-6lowpan-publication",
+      "started": "2026-11-17T08:40:37.778093+01:00",
+      "log": "/home/miguel/workspace/.codex-artifacts/lowpan-publication-20261117/pr05-combined/protocol-debug.log",
+      "library_sha256": "66c8ed1824a04e2d0cdb6bfd66e338e884c48bba7cf1e55119ca546ee1da2c53",
+      "exit_code": 0,
+      "finished": "2026-11-17T08:40:45.700585+01:00"
+    },
+    {
+      "name": "gate-commits",
+      "argv": [
+        "doc/project/enforcement/check-commits.sh",
+        "df33b2c2cbb378350b24b56c810794f50ad1da73..baa11c82c9f3b2604a18ed3325b1df64f58c1108"
+      ],
+      "cwd": "/home/miguel/workspace/inet-6lowpan-publication",
+      "started": "2026-11-17T08:40:45.713496+01:00",
+      "log": "/home/miguel/workspace/.codex-artifacts/lowpan-publication-20261117/pr05-combined/gate-commits.log",
+      "exit_code": 0,
+      "finished": "2026-11-17T08:40:46.369154+01:00"
+    },
+    {
+      "name": "gate-classification",
+      "argv": [
+        "doc/project/enforcement/check-classification.sh",
+        "df33b2c2cbb378350b24b56c810794f50ad1da73..baa11c82c9f3b2604a18ed3325b1df64f58c1108"
+      ],
+      "cwd": "/home/miguel/workspace/inet-6lowpan-publication",
+      "started": "2026-11-17T08:40:46.369529+01:00",
+      "log": "/home/miguel/workspace/.codex-artifacts/lowpan-publication-20261117/pr05-combined/gate-classification.log",
+      "exit_code": 0,
+      "finished": "2026-11-17T08:40:46.766630+01:00"
+    },
+    {
+      "name": "gate-whatsnew",
+      "argv": [
+        "doc/project/enforcement/check-whatsnew.sh",
+        "df33b2c2cbb378350b24b56c810794f50ad1da73..baa11c82c9f3b2604a18ed3325b1df64f58c1108"
+      ],
+      "cwd": "/home/miguel/workspace/inet-6lowpan-publication",
+      "started": "2026-11-17T08:40:46.789155+01:00",
+      "log": "/home/miguel/workspace/.codex-artifacts/lowpan-publication-20261117/pr05-combined/gate-whatsnew.log",
+      "exit_code": 0,
+      "finished": "2026-11-17T08:40:49.295291+01:00"
+    }
+  ],
+  "started": "2026-11-17T08:40:03.901970+01:00",
+  "source_git_tree": "bf453f49a13491c632045a7e0a45514eb6acb81b",
+  "tests_git_tree": "dca56b45056b4d48e0a6b452b2d136df608aaa7b",
+  "configuration_sha256": {
+    ".oppfeatures": "6056c451748eb76fd573bae739bb9ec4eb93e43766c30a4c49cb77ab941b80bb",
+    ".oppfeaturestate": "b06952dd9375d04782d2a1e3e57112bbc1f5ff74d118256dec14a8f4f62b7e27",
+    ".nedexclusions": "9c3b4d0fad4623e40a21d9e15701c09322a449c3ead2b77a79b6e9da7cfb51a2",
+    ".nedfolders": "61620a730620ca748a73822d7d33ed38211409c8e37a87d361800175f2180673"
+  },
+  "parent_comparison": "SOURCE_BASED_UNLESS_LINKED_FOCUSED_RECORD_SAYS_EXECUTED",
+  "focused_records": [
+    "/home/miguel/workspace/.codex-artifacts/lowpan-publication-20261117/c09-automated/record.json",
+    "/home/miguel/workspace/.codex-artifacts/lowpan-publication-20261117/c10-automated/record.json",
+    "/home/miguel/workspace/.codex-artifacts/lowpan-publication-20261117/c11-automated/record.json",
+    "/home/miguel/workspace/.codex-artifacts/lowpan-publication-20261117/c12-automated/record.json"
+  ],
+  "selections": {
+    "unit-debug": {
+      "paths": [
+        "tests/unit/LowpanExtensionNhcWire.test",
+        "tests/unit/LowpanFragmentation.test",
+        "tests/unit/LowpanIphc.test",
+        "tests/unit/LowpanNhcChains.test",
+        "tests/unit/LowpanReassembly.test"
+      ],
+      "fixture_sha256": {
+        "tests/unit/LowpanExtensionNhcWire.test": "e74fc45f8ec316d2051af01e680cf849fdd0caf842ea743aff81c888e4e323b4",
+        "tests/unit/LowpanFragmentation.test": "18b950ccb36153cfb8b59aaddc72c2978b02a9ce074a35d078fccdbe41d336d8",
+        "tests/unit/LowpanIphc.test": "6fd33736edfe2b87adc2a3dddf74c5c6ac6a22178470cbfaed10bd3100c04dc8",
+        "tests/unit/LowpanNhcChains.test": "8bfe6670b27b7bdeabbd3b7fa385f84d5a05150de8031ed39a5cdecbfb3de087",
+        "tests/unit/LowpanReassembly.test": "f28a120bc907639488281fd6c6a63c60cd3de392457d92ad6defc7562b64b959"
+      },
+      "fixture_count": 5
+    },
+    "module-debug": {
+      "paths": [
+        "tests/module/LowpanIphcReceiveMatrix.test",
+        "tests/module/LowpanNativeIpv6Fragment.test",
+        "tests/module/LowpanPeerReceive.test"
+      ],
+      "fixture_sha256": {
+        "tests/module/LowpanIphcReceiveMatrix.test": "08d61181b531fd84517960b0c621eff3375af3014d0126f2b16c95581e939373",
+        "tests/module/LowpanNativeIpv6Fragment.test": "4d4b800bc5c3f2e88abbcf3dd0ac41a44ae25f768dbbb366aaa89b520cce6faa",
+        "tests/module/LowpanPeerReceive.test": "c3d4ebf170789bbdbe3cf0f32a9d011002bda65593474cfd539ca337434a8ec7"
+      },
+      "fixture_count": 3
+    },
+    "protocol-debug": {
+      "paths": [
+        "tests/protocol/6lowpan/LowpanExtensionNhc.test",
+        "tests/protocol/6lowpan/LowpanNativeReassembly.test"
+      ],
+      "fixture_sha256": {
+        "tests/protocol/6lowpan/LowpanExtensionNhc.test": "8f8dc8b13fc44478dce49a48251eb0cee3e755351524887dedfd55ebbdc3bc47",
+        "tests/protocol/6lowpan/LowpanNativeReassembly.test": "e08fe90f8034bdf562798e2994985a63ddb1da33ef166ff3fd84d080e0504778"
+      },
+      "fixture_count": 2
+    }
+  },
+  "finished": "2026-11-17T08:40:49.295698+01:00",
+  "baseline_modified": false,
+  "library_sha256": {
+    "debug": "66c8ed1824a04e2d0cdb6bfd66e338e884c48bba7cf1e55119ca546ee1da2c53",
+    "release": "f1a145271a503aaa2aa34ebeb707fdca5e5c3300c29c21d0972247286a4c3822"
+  },
+  "original_tested_tip": "baa11c82c9f3b2604a18ed3325b1df64f58c1108",
+  "plan": "plan/pending/6lowpan-publication-plan.md",
+  "executable_identity_repair": "/home/miguel/workspace/.codex-artifacts/lowpan-publication-20261117/metadata-history-repair-02/record.json"
+}

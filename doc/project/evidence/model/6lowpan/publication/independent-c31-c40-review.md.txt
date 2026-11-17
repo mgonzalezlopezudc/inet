@@ -1,0 +1,113 @@
+# Independent reconstruction review: C31–C40
+
+Status: complete through immutable C40 `9144bd04edf3e4e18b1171bfea1ae4d2fd11a509`. Reviewed 2026-11-17. No source, configuration, test, index, ref, ledger, seal, build or simulation mutation was performed. Only this report and `independent-c31-c40-projection.json` are owned diagnostic outputs.
+
+## Actionable findings
+
+No reconstruction-induced production-code defect was found in C31–C40. Two commit-message attribution corrections remain.
+
+**Low impact — C39 loses its actual summary and inherits an unqualified executed-comparison claim.** Commit `0401f3bf7c21533dbad4f481ff2db428f53ccb0c` opens with “Refine only the private path query...” and then says verified pre-fix/fixed libraries reproduce two defects. The first paragraph of donor `d571d35530` was omitted: it explains that an original IPv6 datagram may exceed the actual egress MTU even when compressed bytes fit; ordinary Packet Too Big was bypassed; the fix compares original header length with actual interface MTU, falls back to ordinary reassembly initially and cancels unsent forwarding after later incompatibility. That paragraph appears to have been dropped because the evidence-stripping regex matches `passed` inside `bypassed`. Restore that problem/mechanism/result paragraph. Remove the executed-comparison sentence or explicitly attribute it to the historical donor cohort: C39's new-prefix record says `NOT_RUN_SOURCE_BASED`. The generic source-based disclaimer later in the body does not identify the old execution cohort of that claim. Rules: `PR-MSG-SUMMARY`, `PR-MSG-FACTS`, approved evidence-attribution contract. No model/test change is needed.
+
+Root has acknowledged this message repair for the owner-preserving metadata fold. It needs no ledger exception and no duplicate simulation when executable inputs remain identical.
+
+**Low impact — C40 must identify its retained intermediate-library and release results as historical.** Commit `9144bd04edf3e4e18b1171bfea1ae4d2fd11a509` says the same checker binary fails against a preserved pre-fix library and passes against the repair for deleted-owner tag reuse, then mentions separately recorded release completion/printed-row agreement. Those are original P15 intermediate-library/release results. The exact reconstructed C39 parent does not yet implement this recovery feature; C40's focused record is debug-only and labels its new parent comparison source-based. Explicitly qualify that paragraph as original P15 historical evidence, including that it is not an exact C39-parent execution, or remove it while retaining the feature's concrete scenarios and limits. The three reviewer documents already include historical-cohort notices; the message needs equivalent attribution. Rules: `PR-MSG-FACTS`, approved evidence-attribution contract. No source or fixture correction is indicated.
+
+## Scope and evidence
+
+- Base `4e4a15d85d846795c754bb459ec4efe5beb97462`; reviewed immutable C40 tip `9144bd04edf3e4e18b1171bfea1ae4d2fd11a509`. C39 is `0401f3bf7c21533dbad4f481ff2db428f53ccb0c`.
+- Applied the active project map, contribution/review routes, series/testing/documentation rules, general checklist and exception/seal registries; used the code-review, architectural-requirements and pull-request-authoring skills with the C++/OMNeT++/INET review references.
+- Review scope is reconstruction-specific preservation, reordered prerequisites, owning artifacts, stage claims and evidence honesty. This is not a new wholesale audit of unchanged original protocol internals.
+- All **ten C31–C40 source cuts** exactly match the approved ordering-probe source trees. All **21 per-cut changed `.test` blob comparisons** match. `independent-c31-c40-projection.json` records the exact hashes. C40's entire final `src` tree also equals the frozen corrected oracle `1853c49ba0c29edeb2cfed5378c01305beb519ba` exactly.
+- C31's unsolicited-Moved flag repair precedes the strict automatic-host consumer. C32's fixture explicitly uses `extendedRegistration=false`, available after C30; it does not need C33's host-history APIs. C33 updates the earlier registrar document only when its updated-host consumer arrives.
+- C34/C35 retain their native wire/parser/forwarding and inspection support together, preserving default route-over behavior and the approved feature cuts. C36 supplies the local completion API/module proof before C37's independently usable paced source and C38's VRB consumer.
+- C36's new `native-completion.md` carries the extracted source-version completion contract and a proper current header. Its aggregate old counts link to an immutable historical record, with a separate publication-cohort notice; those counts are not claimed as fresh C36 execution.
+- C39 changes only the private path-query signature/callers to consume the existing IPv6 header and actual NIC MTU. It introduces no retained original-size state or generic IPv6 API. Its raw foreign-peer fixture disables UDP/TCP and uses no C40 recovery selector; moving this repair before P15 exposes no future configuration dependency.
+- C40 retains the complete recovery wire/source/relay/receiver behavior and all three unit/three protocol fixtures with their source-version reviewer documents. Its new RFRAG/RFRAG-ACK serializers and inspection changes arrive with the coupled path. Raw no-UDP, deleted-owner/tag-guard, lifecycle and region-tag assertions are preserved exactly; none is weakened by reconstruction. No future protocol input or source difference is introduced.
+- Existing C31–C40 records show incremental debug compilation, nonzero assigned focused selections and three fast series checks passing. PR11–PR16 combined records identify their actual tips and both-mode compilation. C40's full campaign is being executed separately by root and is not declared complete by this review. Source-based parent comparisons remain explicitly unexecuted. No duplicate runtime execution was launched by the reviewer.
+- All changed Markdown relative targets and heading anchors resolve at their owning C31–C40 cuts. No forward local artifact dependency was found in this selection. External URL reachability was not fetched.
+- Inherited donor header omissions were disclosed separately: C32 `pinned-source-validity.md`; C33 `extended-host-lifecycle.md`; C37 `paced-fragmentation.md`; C38 `fragment-forwarding.md` and `fragment-forwarding-lifecycle.md`; C39 `fragment-forwarding-mtu.md`; C40 `selective-recovery-lifecycle.md`. They lack `DR-HEADER` metadata, but are not newly introduced production/reordering defects. Root's metadata pass can normalize the newly published documents while retaining historical donor snapshots.
+- No baseline update or sealed packet-source modification occurs in the reviewed range. No ledger/seal decision is required.
+
+## Resolution of the earlier direct-example evidence gap
+
+Inspected `c06-local-launcher-recheck/record.json`: status PASS, exact tested revision `1758fe1ddfa145df918e26358e7bbd30619cecea`, matching C06 source tree, retained-core root and absolute local launcher with explicit local `INET_ROOT`. Actual example output loads retained-core NED roots. The receiving-application observations are Ping `[1]`, routed UDP `[0,1]`, network Ping `[1]`; all three correctly resolved example commands exit0. This supersedes the old wrong-checkout direct-example scope. The old attempt must remain historically classified, with C06/C07 claims linked to the corrected record. Ordinary explicit-project U/M/P evidence remains separately valid as traced in the first report.
+
+## Not verified and residual limits
+
+Final C41 acceptance, broader configuration combinations, complete normative correctness, live external radios and published PR descriptions remain outside this bounded review. Exact-parent runtime comparisons remain unexecuted where labelled source-based. After the metadata/history fold, preserve the checkpoint, remap tested cuts to new commits and prove executable source/fixture/configuration identity before reusing results.
+
+Compliance for C31–C40: **C39/C40 message corrections required; no demonstrated new production-code defect.**
+
+## Canonical general checklist
+
+Exact canonical questions are retained. Verdicts apply to C31–C40 reconstruction.
+
+**[QR-DESIGN-MINIMAL] Does the change preserve required behavior with the least complex sufficient mechanism?** PASS — reconstruction adds no cleanup-specific production machinery; C39 uses the existing header rather than new size state.
+
+**[AR-ORG-CONTRACTS] Does a new interface define a concrete replacement role?** PASS — completion uses the existing packet-push callback rather than a speculative protocol-control interface.
+
+**[AR-ORG-CONTRACTS] Do substitutable implementations preserve the contract's declared outcomes?** PASS — native completion's declared exclusions and compatibility/standalone compositions retain their donor versions and direct module checks.
+
+**[PR-SPLIT-ONE-CHANGE / PR-SPLIT-SIZE] Does a commit hold a part that can stand alone?** PASS — unsolicited flags, source validation, completion, pacing, VRB and actual-MTU repair remain separate approved cuts; large coupled features explain their boundaries.
+
+**[PR-SPLIT-PREPARE] Does preparation come before the change that needs it?** PASS — C31/C32 precede C33; C36 precedes C37/C38; C39 has no P15 dependency.
+
+**[PR-MSG-BODY / PR-MSG-WHY] Does a substantial commit explain itself?** PASS — bodies carry mechanisms and outcomes; the more specific C39 missing-summary problem is recorded under PR-MSG-SUMMARY.
+
+**[PR-MSG-SUMMARY] Does a commit body start with a summary?** FLAG — C39's missing donor problem/change paragraph is the finding above; restore it in the owning message. No ledger row.
+
+**[PR-MSG-FACTS] Does a commit message describe only the final change?** FLAG — findings at C39/C40: qualify/remove donor executed pre-fix/fixed and release comparisons. No duplicate correctness finding or ledger row.
+
+**[PR-REQ-STORY] Does a pull request description answer the reviewer's questions up front?** N/A — no published PR description in scope.
+
+**[AR-ORG-CONTRACT-PURITY] Does a contract header declare anything that is not part of the role?** PASS — no reconstruction-specific contract-policy addition.
+
+**[AR-ORG-VIS-SPLIT] Does protocol/model code contain visualization or instrumentation logic?** N/A — no reconstruction-specific visualization change.
+
+**[AR-ORG-KERNEL] Does the change reimplement or patch an OMNeT++ kernel facility inside INET?** N/A — no kernel facility change.
+
+**[AR-MOD-COMPOSITION] Is new behavior added by composition, or by inheritance / a growing god-module?** PASS — native completion, source pacing and VRB retain the approved independent owners/prerequisites.
+
+**[AR-COM-SOCKETS] Does a new application talk to a transport protocol via raw messages?** N/A — no new application implementation in reconstruction scope.
+
+**[AR-COM-DIRECT] Is a zero-time message standing in for a required direct call?** PASS — no new scheduling/direct-call substitution introduced by reconstruction.
+
+**[AR-COM-NOTIFY] Is a behavior-driving signal really an independent notification?** PASS — callback/notification source and test versions remain identical to the intended cut.
+
+**[AR-OBS-SIGNALS] Can attaching an observer change modeled behavior?** PASS — no reconstruction observer dependency; cancellation/lifecycle fixture assertions stay present.
+
+**[AR-OBS-NED-TRUTH] Does prose/code duplicate what a NED declaration owns?** PASS — declared profile exclusions and enabled-consumer transitions remain in their responsible cuts.
+
+**[AR-OBS-INTROSPECTION] Does a new protocol ship its introspection support?** PASS — Mesh/BC0, page/ESC and RFRAG/RFRAG-ACK wire slices retain their serializer/dissector/printer consumers.
+
+**[AR-CFG-INFER / QR-DUP] Is a derivable fact restated instead of inferred?** PASS — C39 consumes the original header; no redundant retained size state is introduced.
+
+**[QR-OBJECT-OWNERSHIP] Does each object follow its declared ownership model on every supported path?** PASS — exact source preservation and completion/lifecycle tests show no reconstruction ownership change.
+
+**[AR-CFG-PARAMS] Are new parameters/fields well-formed?** PASS — declaration/consumer versions are kept together; C32/C39 fixtures use only available parameters.
+
+**[AR-EXT-REUSE] Does each new mechanism need to exist?** PASS — no cleanup-specific permanent helper or duplicated owner.
+
+**[AR-EXT-NOCORE] Does adding a protocol require editing core code?** PASS — optional protocol owners remain local; sealed packet source unchanged.
+
+**[AR-EXT-MINIMAL-SURFACE] Is a new member more visible than its callers need?** PASS — reconstruction adds no visibility expansion; C39 is private query refinement.
+
+**[AR-EXT-VIRTUAL-IS-A-PROMISE] Is a new virtual a stated extension point?** PASS — no speculative virtual introduced by the reconstruction.
+
+**[AR-BUILD-DECLARATIVE] Are build values hardcoded?** PASS — no new machine-specific production build value.
+
+**[RR-NUMERIC-STABLE] Is an externally exposed enum value or named numeric code explicitly assigned?** PASS — approved wire/source code values are preserved.
+
+**[AR-QUAL-NAMING] Do new NED/`.msg`/semantic names follow the conventions?** PASS — no reconstruction naming drift or misplaced generic repair found.
+
+**[AR-QUAL-LOGGING] Is a programming error logged instead of thrown?** PASS — reconstruction changes no invariant handling.
+
+**[AR-QUAL-DETERMINISM] Does simulation logic depend on non-deterministic sources or pointer ordering?** PASS — no reconstruction change to model event/random inputs; deterministic fixture assertions retained.
+
+**[AR-QUAL-TESTS] Does the change ship with tests matching its nature?** PASS — 21 per-cut fixture comparisons match; protocol/module/unit explanations travel with their behavior.
+
+**[AR-QUAL-TRACEABILITY] Does a commit that moves a recorded expectation explain the movement?** N/A — no stored baseline update.
+
+**[AR-QUAL-DISPLAY] Does a new module have a distinguishing icon?** PASS — declared NED composition is source-identical to the intended cuts.
+
+REVIEW: 27 PASS, 5 N/A, 2 FLAG, 0 QUESTION

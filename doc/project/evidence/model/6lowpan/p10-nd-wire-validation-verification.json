@@ -1,0 +1,195 @@
+{
+  "scope": "Standalone optional IPv6 malformed ND receive guard, with no authority helper or border role",
+  "cwd": "/home/miguel/workspace/.codex-artifacts/lowpan-ns-prerequisite-20261115",
+  "seed": 0,
+  "source_sha256": {
+    "src/inet/linklayer/lowpan/LowpanIpv6.cc": "393421ba7279cc9ac3bddf8b8330f4af39216fa9500fbd805a7cb170935488cc",
+    "src/inet/linklayer/lowpan/LowpanIpv6.h": "79100d5af03ec8b0880772d128fb2f1c9e8f7582006b806f9e252a607240e33e",
+    "tests/protocol/6lowpan/LowpanNdWireValidation.test": "ae5ce0b15ba2a691a284875d1bc4a0a50e969870e7dddfcfd6ff8e0e1d227167",
+    "tests/protocol/6lowpan/nd-wire-validation.md": "e39f1a980dc8e6ed7b2eecda6884780b860182471d88ed3e8dc716cc44aa74a6",
+    "doc/whatsnew/compatible/lowpan-nd-wire-validation.txt": "d75006d66babc49b48c5838ea9c968a965a9110624ff892c7fd6af5a1f902ee1"
+  },
+  "parent_comparison": {
+    "parent_commit": "9584a787a1",
+    "expected_parent_result": "FAIL",
+    "runner_exit_code": 1,
+    "failure": "Generic IPv6 strict peek rejected an incorrect DAR before ND validation",
+    "time": "0.01000789s",
+    "event": 7,
+    "runtime_sha256": {
+      "/home/miguel/workspace/.codex-artifacts/lowpan-guard-parent-runtime-20261116/test.err": "1891052ab27cdbb56e21c468badbbc164f1cc1bc47f62156955eb3088984a6e1",
+      "/home/miguel/workspace/.codex-artifacts/lowpan-guard-parent-runtime-20261116/WireCheck.cc": "f31c205c4ae9009c05e04df5bf5c03c291ae212b345f672d16e4666146666ea4",
+      "/home/miguel/workspace/.codex-artifacts/lowpan-guard-parent-runtime-20261116/test.ned": "7814cac0fbf1792b2dddeff02847f4a468f725cb2c3d5a3878b3d71f9d6b22c0",
+      "/home/miguel/workspace/.codex-artifacts/lowpan-guard-parent-runtime-20261116/omnetpp.ini": "6e32bbe73259a50a8238775cb4f057e78d3b81244d2fbe28ffa1f91ab9ee4857",
+      "/home/miguel/workspace/.codex-artifacts/lowpan-guard-parent-runtime-20261116/package.ned": "cd087371a534f6449684bc7d339de4f7e42d5348f973350973a81f5128a0e418",
+      "/home/miguel/workspace/.codex-artifacts/lowpan-guard-parent-runtime-20261116/test.out": "e71fa58dca3eb7e7bb8441548fa1da6126bb1d98366da20991c935db7148c47f"
+    },
+    "tested_source_equivalent_to": "562f4640a482a69d67020b045c8ed5172550db2a",
+    "source_equivalence_note": "Only plan documentation differs between tested9584a787a1 and the immediate proposed parent; git diff over src/tests is empty.",
+    "build_log": "/home/miguel/workspace/.codex-artifacts/lowpan-guard-parent-debug.log",
+    "command": [
+      "opp_run_protocol_tests",
+      "--load",
+      ".",
+      "-p",
+      "inet",
+      "-m",
+      "debug",
+      "--no-build",
+      "-w",
+      "^tests/protocol/6lowpan$",
+      "-f",
+      "LowpanNdWireValidation\\.test$",
+      "--no-concurrent",
+      "-l",
+      "INFO",
+      "-L",
+      "INFO",
+      "--log-file",
+      "/home/miguel/workspace/.codex-artifacts/lowpan-guard-parent-protocol-driver.log"
+    ],
+    "log": "/home/miguel/workspace/.codex-artifacts/lowpan-guard-parent-protocol.log"
+  },
+  "checks": [
+    {
+      "command": [
+        "make",
+        "-j4",
+        "MODE=debug"
+      ],
+      "mode": "debug",
+      "exit_code": 0,
+      "log": "/home/miguel/workspace/.codex-artifacts/lowpan-guard-fixed-debug.log"
+    },
+    {
+      "command": [
+        "make",
+        "-j4",
+        "MODE=release"
+      ],
+      "mode": "release",
+      "exit_code": 0,
+      "log": "/home/miguel/workspace/.codex-artifacts/lowpan-guard-fixed-release.log"
+    },
+    {
+      "command": [
+        "opp_run_protocol_tests",
+        "--load",
+        ".",
+        "-p",
+        "inet",
+        "-m",
+        "debug",
+        "--no-build",
+        "-w",
+        "^tests/protocol/6lowpan$",
+        "-f",
+        "Lowpan(NdWireValidation|HostRegistration|NeighborRegistration|RouterDiscovery)\\.test$",
+        "--no-concurrent",
+        "-l",
+        "INFO",
+        "-L",
+        "INFO",
+        "--log-file",
+        "/home/miguel/workspace/.codex-artifacts/lowpan-guard-fixed-protocol-driver.log"
+      ],
+      "mode": "debug",
+      "exit_code": 0,
+      "fixtures": 4,
+      "runs": 9,
+      "log": "/home/miguel/workspace/.codex-artifacts/lowpan-guard-fixed-protocol.log"
+    },
+    {
+      "command": [
+        "doc/project/enforcement/check-architecture.sh",
+        "src/inet/linklayer/lowpan"
+      ],
+      "mode": "static",
+      "exit_code": 0,
+      "log": "/home/miguel/workspace/.codex-artifacts/lowpan-guard-fixed-architecture.log"
+    },
+    {
+      "command": [
+        "doc/project/enforcement/check-naming.sh",
+        "src/inet/linklayer/lowpan"
+      ],
+      "mode": "static",
+      "exit_code": 0,
+      "log": "/home/miguel/workspace/.codex-artifacts/lowpan-guard-fixed-naming.log"
+    },
+    {
+      "command": [
+        "doc/project/enforcement/check-source-seals.sh",
+        "src/inet/linklayer/lowpan/LowpanIpv6.h",
+        "src/inet/linklayer/lowpan/LowpanIpv6.cc"
+      ],
+      "mode": "static",
+      "exit_code": 0,
+      "log": "/home/miguel/workspace/.codex-artifacts/lowpan-guard-fixed-seals.log"
+    }
+  ],
+  "debug_assertions": {
+    "literal_inputs": 8,
+    "malformed_drops": 5,
+    "unsupported_valid_dar_drops": 2,
+    "ordinary_ethernet_na": 1,
+    "known_types": [
+      133,
+      134,
+      135,
+      136,
+      137,
+      157,
+      158
+    ],
+    "minimum_lengths": [
+      8,
+      16,
+      24,
+      24,
+      40,
+      32,
+      32
+    ]
+  },
+  "runtime_sha256": {
+    "/home/miguel/workspace/.codex-artifacts/lowpan-guard-fixed-runtime-20261116/LowpanNdWireValidation/test.err": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+    "/home/miguel/workspace/.codex-artifacts/lowpan-guard-fixed-runtime-20261116/LowpanNdWireValidation/WireCheck.cc": "f31c205c4ae9009c05e04df5bf5c03c291ae212b345f672d16e4666146666ea4",
+    "/home/miguel/workspace/.codex-artifacts/lowpan-guard-fixed-runtime-20261116/LowpanNdWireValidation/test.ned": "7814cac0fbf1792b2dddeff02847f4a468f725cb2c3d5a3878b3d71f9d6b22c0",
+    "/home/miguel/workspace/.codex-artifacts/lowpan-guard-fixed-runtime-20261116/LowpanNdWireValidation/omnetpp.ini": "6e32bbe73259a50a8238775cb4f057e78d3b81244d2fbe28ffa1f91ab9ee4857",
+    "/home/miguel/workspace/.codex-artifacts/lowpan-guard-fixed-runtime-20261116/LowpanNdWireValidation/package.ned": "cd087371a534f6449684bc7d339de4f7e42d5348f973350973a81f5128a0e418",
+    "/home/miguel/workspace/.codex-artifacts/lowpan-guard-fixed-runtime-20261116/LowpanNdWireValidation/test.out": "c9967f1d5a38e0551ed990c3f155befeda6024b6fbef8734aac638525827c488",
+    "/home/miguel/workspace/.codex-artifacts/lowpan-guard-fixed-runtime-20261116/LowpanHostRegistration/test.err": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+    "/home/miguel/workspace/.codex-artifacts/lowpan-guard-fixed-runtime-20261116/LowpanHostRegistration/test.ned": "e38e76a975e4ab4ef5ec140c4b171b796efe2561106d8522650368a53fd6e1ef",
+    "/home/miguel/workspace/.codex-artifacts/lowpan-guard-fixed-runtime-20261116/LowpanHostRegistration/omnetpp.ini": "76f228d792520a09f2c62e8f7fe339d44d6876e283c0f931378470f531feda54",
+    "/home/miguel/workspace/.codex-artifacts/lowpan-guard-fixed-runtime-20261116/LowpanHostRegistration/package.ned": "a41387d8ebf8a151be7f152dff94c3071768975fbf778e82cdaaf2567c949004",
+    "/home/miguel/workspace/.codex-artifacts/lowpan-guard-fixed-runtime-20261116/LowpanHostRegistration/test.out": "78f64b3f5721ed48a794d4a7d7a47bf34ea6d83a2d08c6de92a00985d7b39b3e",
+    "/home/miguel/workspace/.codex-artifacts/lowpan-guard-fixed-runtime-20261116/LowpanHostRegistration/HostCheck.cc": "1c6e8c35f540d02000efd410ed71039010b7cbdfb490322940cb73658c284861",
+    "/home/miguel/workspace/.codex-artifacts/lowpan-guard-fixed-runtime-20261116/LowpanNeighborRegistration/test.err": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+    "/home/miguel/workspace/.codex-artifacts/lowpan-guard-fixed-runtime-20261116/LowpanNeighborRegistration/test.ned": "640813af7660d3d063260e2bef08c85385b3c66342d9be756e234876c8e8c0ed",
+    "/home/miguel/workspace/.codex-artifacts/lowpan-guard-fixed-runtime-20261116/LowpanNeighborRegistration/RegistrationCheck.cc": "432b3da2488b7f3b17d95262af3dadac3f68d59a8c7325e4e757140fa09da346",
+    "/home/miguel/workspace/.codex-artifacts/lowpan-guard-fixed-runtime-20261116/LowpanNeighborRegistration/omnetpp.ini": "92c767dc7407760d53d45270c02806d096a667d0c71006484a4688246e83c2d8",
+    "/home/miguel/workspace/.codex-artifacts/lowpan-guard-fixed-runtime-20261116/LowpanNeighborRegistration/package.ned": "ff74c63e890551d5cb8339be877a4e6569ab0413355daa8f6a49924ef3155cd2",
+    "/home/miguel/workspace/.codex-artifacts/lowpan-guard-fixed-runtime-20261116/LowpanNeighborRegistration/test.out": "1ae357c3feb1eeab86c45f4ab06cc2a9de79baec8dd27ec0583fb5ea8b74d68e",
+    "/home/miguel/workspace/.codex-artifacts/lowpan-guard-fixed-runtime-20261116/LowpanRouterDiscovery/DiscoveryCheck.cc": "152dc30614885d83529cceb23578002f87f4dbdeeddaad2633e35931a9972946",
+    "/home/miguel/workspace/.codex-artifacts/lowpan-guard-fixed-runtime-20261116/LowpanRouterDiscovery/test.err": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+    "/home/miguel/workspace/.codex-artifacts/lowpan-guard-fixed-runtime-20261116/LowpanRouterDiscovery/test.ned": "ac63872ca58164f93d6ccb70171aa72be206bec424c7ba59aac6ccc0558d31e0",
+    "/home/miguel/workspace/.codex-artifacts/lowpan-guard-fixed-runtime-20261116/LowpanRouterDiscovery/omnetpp.ini": "8c6c4631a1cb40f81c02c4a548449f2e30357ff4130515a84eb00c1bd21184a4",
+    "/home/miguel/workspace/.codex-artifacts/lowpan-guard-fixed-runtime-20261116/LowpanRouterDiscovery/package.ned": "fa26eef8688285c0a0240650d7852fd96269dd7c634ed5a90c21adabc08bfd16",
+    "/home/miguel/workspace/.codex-artifacts/lowpan-guard-fixed-runtime-20261116/LowpanRouterDiscovery/test.out": "0a32ad9331cc8e3377376b291063302a59e3914a75cd9a1ea7517cd5f289fc8d"
+  },
+  "independent_review": {
+    "PASS": 22,
+    "NA": 12,
+    "FLAG": 0,
+    "QUESTION": 0
+  },
+  "not_run": [
+    "release behavioral assertions",
+    "full feature matrix"
+  ],
+  "limits": [
+    "No generic IPv6 or sealed packet code changed",
+    "No authority ownership or routing policy is established by the static guard fixture"
+  ]
+}

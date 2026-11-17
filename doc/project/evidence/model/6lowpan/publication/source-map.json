@@ -1,0 +1,2713 @@
+[
+  {
+    "sha": "3d7b8d9e143198ec52058d61bd78a4979abdea6e",
+    "subject": "common: change: prepare interface identity before link-layer users",
+    "paths": [
+      "src/inet/common/InitStages.cc"
+    ],
+    "test_files": [],
+    "reviewer_documents": [],
+    "plan_files": [],
+    "publication_commits": [
+      "C01"
+    ],
+    "excluded": false,
+    "disposition": "Port delta with its original test/document/registration obligations."
+  },
+  {
+    "sha": "34a25f8f6a99d278563f23290e0bf2c9937ecc91",
+    "subject": "tests: location: move VHT HT capability checks to module tests",
+    "paths": [
+      "tests/module/Ieee80211VhtHtCapabilities_1.test",
+      "tests/unit/Ieee80211VhtHtCapabilities_1.test"
+    ],
+    "test_files": [
+      "tests/module/Ieee80211VhtHtCapabilities_1.test",
+      "tests/unit/Ieee80211VhtHtCapabilities_1.test"
+    ],
+    "reviewer_documents": [],
+    "plan_files": [],
+    "publication_commits": [],
+    "excluded": true,
+    "disposition": "Excluded: separate Wi-Fi work; retain pinned-target contents on its exclusive paths."
+  },
+  {
+    "sha": "e413d4d9a6652602db35a53c20bee2a0addda090",
+    "subject": "ieee80211: change: separate capability and BSS state ownership",
+    "paths": [
+      "doc/project/design/ieee80211-model-architecture.md",
+      "doc/src/migration-guide/development/ieee80211-capability-bss-state-ownership.rst",
+      "doc/whatsnew/incompatible/ieee80211-capability-bss-state-ownership.txt",
+      "plan/done/80211htcapop-refactor-v3-evidence.md",
+      "plan/done/80211htcapop-refactor-v3.md",
+      "src/inet/common/Simsignals.cc",
+      "src/inet/common/Simsignals.h",
+      "src/inet/linklayer/ieee80211/__TODO",
+      "src/inet/linklayer/ieee80211/mac/Ds.cc",
+      "src/inet/linklayer/ieee80211/mac/Ieee80211Mac.cc",
+      "src/inet/linklayer/ieee80211/mac/Ieee80211Mac.h",
+      "src/inet/linklayer/ieee80211/mac/Ieee80211Mac.ned",
+      "src/inet/linklayer/ieee80211/mac/Rx.cc",
+      "src/inet/linklayer/ieee80211/mac/Rx.h",
+      "src/inet/linklayer/ieee80211/mac/Rx.ned",
+      "src/inet/linklayer/ieee80211/mac/blockack/OriginatorBlockAckAgreementPolicy.cc",
+      "src/inet/linklayer/ieee80211/mac/blockack/OriginatorBlockAckAgreementPolicy.h",
+      "src/inet/linklayer/ieee80211/mac/blockack/OriginatorBlockAckAgreementPolicy.ned",
+      "src/inet/linklayer/ieee80211/mac/channelaccess/Dcaf.cc",
+      "src/inet/linklayer/ieee80211/mac/channelaccess/Dcaf.h",
+      "src/inet/linklayer/ieee80211/mac/channelaccess/Dcaf.ned",
+      "src/inet/linklayer/ieee80211/mac/channelaccess/Edcaf.cc",
+      "src/inet/linklayer/ieee80211/mac/channelaccess/Edcaf.h",
+      "src/inet/linklayer/ieee80211/mac/channelaccess/Edcaf.ned",
+      "src/inet/linklayer/ieee80211/mac/common/ModeSetListener.cc",
+      "src/inet/linklayer/ieee80211/mac/common/ModeSetListener.h",
+      "src/inet/linklayer/ieee80211/mac/common/ModeSetModuleBase.cc",
+      "src/inet/linklayer/ieee80211/mac/common/ModeSetModuleBase.h",
+      "src/inet/linklayer/ieee80211/mac/contract/IIeee80211MacConfiguration.h",
+      "src/inet/linklayer/ieee80211/mac/contract/IIeee80211MacConfiguration.ned",
+      "src/inet/linklayer/ieee80211/mac/coordinationfunction/Dcf.cc",
+      "src/inet/linklayer/ieee80211/mac/coordinationfunction/Dcf.h",
+      "src/inet/linklayer/ieee80211/mac/coordinationfunction/Dcf.ned",
+      "src/inet/linklayer/ieee80211/mac/coordinationfunction/Hcf.cc",
+      "src/inet/linklayer/ieee80211/mac/coordinationfunction/Hcf.h",
+      "src/inet/linklayer/ieee80211/mac/coordinationfunction/Hcf.ned",
+      "src/inet/linklayer/ieee80211/mac/framesequence/FrameSequenceContext.cc",
+      "src/inet/linklayer/ieee80211/mac/framesequence/FrameSequenceContext.h",
+      "src/inet/linklayer/ieee80211/mac/originator/OriginatorAckPolicy.cc",
+      "src/inet/linklayer/ieee80211/mac/originator/OriginatorAckPolicy.h",
+      "src/inet/linklayer/ieee80211/mac/originator/OriginatorAckPolicy.ned",
+      "src/inet/linklayer/ieee80211/mac/originator/OriginatorQosAckPolicy.cc",
+      "src/inet/linklayer/ieee80211/mac/originator/OriginatorQosAckPolicy.h",
+      "src/inet/linklayer/ieee80211/mac/originator/OriginatorQosAckPolicy.ned",
+      "src/inet/linklayer/ieee80211/mac/originator/QosRtsPolicy.cc",
+      "src/inet/linklayer/ieee80211/mac/originator/QosRtsPolicy.h",
+      "src/inet/linklayer/ieee80211/mac/originator/QosRtsPolicy.ned",
+      "src/inet/linklayer/ieee80211/mac/originator/RtsPolicy.cc",
+      "src/inet/linklayer/ieee80211/mac/originator/RtsPolicy.h",
+      "src/inet/linklayer/ieee80211/mac/originator/RtsPolicy.ned",
+      "src/inet/linklayer/ieee80211/mac/originator/TxopProcedure.cc",
+      "src/inet/linklayer/ieee80211/mac/originator/TxopProcedure.h",
+      "src/inet/linklayer/ieee80211/mac/originator/TxopProcedure.ned",
+      "src/inet/linklayer/ieee80211/mac/protectionmechanism/OriginatorProtectionMechanism.cc",
+      "src/inet/linklayer/ieee80211/mac/protectionmechanism/OriginatorProtectionMechanism.h",
+      "src/inet/linklayer/ieee80211/mac/protectionmechanism/OriginatorProtectionMechanism.ned",
+      "src/inet/linklayer/ieee80211/mac/protectionmechanism/SingleProtectionMechanism.cc",
+      "src/inet/linklayer/ieee80211/mac/protectionmechanism/SingleProtectionMechanism.h",
+      "src/inet/linklayer/ieee80211/mac/protectionmechanism/SingleProtectionMechanism.ned",
+      "src/inet/linklayer/ieee80211/mac/ratecontrol/AarfRateControl.ned",
+      "src/inet/linklayer/ieee80211/mac/ratecontrol/OnoeRateControl.ned",
+      "src/inet/linklayer/ieee80211/mac/ratecontrol/RateControlBase.cc",
+      "src/inet/linklayer/ieee80211/mac/ratecontrol/RateControlBase.h",
+      "src/inet/linklayer/ieee80211/mac/rateselection/Ieee80211PeerModeSelection.cc",
+      "src/inet/linklayer/ieee80211/mac/rateselection/Ieee80211PeerModeSelection.h",
+      "src/inet/linklayer/ieee80211/mac/rateselection/QosRateSelection.cc",
+      "src/inet/linklayer/ieee80211/mac/rateselection/QosRateSelection.h",
+      "src/inet/linklayer/ieee80211/mac/rateselection/QosRateSelection.ned",
+      "src/inet/linklayer/ieee80211/mac/rateselection/RateSelection.cc",
+      "src/inet/linklayer/ieee80211/mac/rateselection/RateSelection.h",
+      "src/inet/linklayer/ieee80211/mac/rateselection/RateSelection.ned",
+      "src/inet/linklayer/ieee80211/mac/recipient/CtsPolicy.cc",
+      "src/inet/linklayer/ieee80211/mac/recipient/CtsPolicy.h",
+      "src/inet/linklayer/ieee80211/mac/recipient/CtsPolicy.ned",
+      "src/inet/linklayer/ieee80211/mac/recipient/QosCtsPolicy.cc",
+      "src/inet/linklayer/ieee80211/mac/recipient/QosCtsPolicy.h",
+      "src/inet/linklayer/ieee80211/mac/recipient/QosCtsPolicy.ned",
+      "src/inet/linklayer/ieee80211/mac/recipient/RecipientAckPolicy.cc",
+      "src/inet/linklayer/ieee80211/mac/recipient/RecipientAckPolicy.h",
+      "src/inet/linklayer/ieee80211/mac/recipient/RecipientAckPolicy.ned",
+      "src/inet/linklayer/ieee80211/mac/recipient/RecipientQosAckPolicy.cc",
+      "src/inet/linklayer/ieee80211/mac/recipient/RecipientQosAckPolicy.h",
+      "src/inet/linklayer/ieee80211/mac/recipient/RecipientQosAckPolicy.ned",
+      "src/inet/linklayer/ieee80211/mgmt/Ieee80211AgentSta.cc",
+      "src/inet/linklayer/ieee80211/mgmt/Ieee80211MgmtAdhoc.cc",
+      "src/inet/linklayer/ieee80211/mgmt/Ieee80211MgmtAdhoc.h",
+      "src/inet/linklayer/ieee80211/mgmt/Ieee80211MgmtAp.cc",
+      "src/inet/linklayer/ieee80211/mgmt/Ieee80211MgmtAp.ned",
+      "src/inet/linklayer/ieee80211/mgmt/Ieee80211MgmtApBase.cc",
+      "src/inet/linklayer/ieee80211/mgmt/Ieee80211MgmtApBase.h",
+      "src/inet/linklayer/ieee80211/mgmt/Ieee80211MgmtApSimplified.ned",
+      "src/inet/linklayer/ieee80211/mgmt/Ieee80211MgmtBase.cc",
+      "src/inet/linklayer/ieee80211/mgmt/Ieee80211MgmtBase.h",
+      "src/inet/linklayer/ieee80211/mgmt/Ieee80211MgmtSta.cc",
+      "src/inet/linklayer/ieee80211/mgmt/Ieee80211MgmtSta.h",
+      "src/inet/linklayer/ieee80211/mgmt/Ieee80211MgmtStaSimplified.cc",
+      "src/inet/linklayer/ieee80211/mgmt/contract/IIeee80211BssProvider.h",
+      "src/inet/linklayer/ieee80211/mgmt/contract/IIeee80211BssProvider.ned",
+      "src/inet/linklayer/ieee80211/mib/Ieee80211HtCapabilities.h",
+      "src/inet/linklayer/ieee80211/mib/Ieee80211Mib.cc",
+      "src/inet/linklayer/ieee80211/mib/Ieee80211Mib.h",
+      "src/inet/linklayer/ieee80211/mib/Ieee80211Mib.ned",
+      "src/inet/networklayer/configurator/base/L3NetworkConfiguratorBase.cc",
+      "src/inet/physicallayer/wireless/ieee80211/contract/IIeee80211ReceiverCapabilities.h",
+      "src/inet/physicallayer/wireless/ieee80211/contract/IIeee80211ReceiverCapabilities.ned",
+      "src/inet/physicallayer/wireless/ieee80211/contract/IIeee80211TransmitterCapabilities.h",
+      "src/inet/physicallayer/wireless/ieee80211/contract/IIeee80211TransmitterCapabilities.ned",
+      "src/inet/physicallayer/wireless/ieee80211/packetlevel/Ieee80211Receiver.cc",
+      "src/inet/physicallayer/wireless/ieee80211/packetlevel/Ieee80211Receiver.h",
+      "src/inet/physicallayer/wireless/ieee80211/packetlevel/Ieee80211Receiver.ned",
+      "src/inet/physicallayer/wireless/ieee80211/packetlevel/Ieee80211Transmitter.h",
+      "src/inet/physicallayer/wireless/ieee80211/packetlevel/Ieee80211Transmitter.ned",
+      "tests/module/Ieee80211AgentStaReassociation_1.test",
+      "tests/module/Ieee80211BasicCompatibility_1.test",
+      "tests/module/Ieee80211BlockAckAssociationReset_1.test",
+      "tests/module/Ieee80211BlockAckScheduling_1.test",
+      "tests/module/Ieee80211CompressedBlockAckAdmission_1.test",
+      "tests/module/Ieee80211CompressedBlockAckExchange_1.test",
+      "tests/module/Ieee80211CompressedBlockAckOriginator_1.test",
+      "tests/module/Ieee80211ConfigurationContracts_1.test",
+      "tests/module/Ieee80211HcfManagementRecovery_1.test",
+      "tests/module/Ieee80211HcfMultipleProtection_2.test",
+      "tests/module/Ieee80211HtAntennaRateControl_1.test",
+      "tests/module/Ieee80211HtAssociation_1.test",
+      "tests/module/Ieee80211HtCapabilityPreparation_1.test",
+      "tests/module/Ieee80211MgmtApChannelChange_1.test",
+      "tests/module/Ieee80211MgmtApGenericRadio_1.test",
+      "tests/module/Ieee80211MgmtApHcfQueueDrop_1.test",
+      "tests/module/Ieee80211MgmtApHcfRtsTimeout_1.test",
+      "tests/module/Ieee80211MgmtApLifecycle_1.test",
+      "tests/module/Ieee80211MgmtApMalformedHtCap_1.test",
+      "tests/module/Ieee80211MgmtApQueueDrop_1.test",
+      "tests/module/Ieee80211MgmtApReassociationSnapshot_1.test",
+      "tests/module/Ieee80211MgmtApTimeout_1.test",
+      "tests/module/Ieee80211MgmtRatePublication_1.test",
+      "tests/module/Ieee80211MgmtStaBeaconUpdate_1.test",
+      "tests/module/Ieee80211MgmtStaDeauthentication_1.test",
+      "tests/module/Ieee80211MgmtStaDisassociation_1.test",
+      "tests/module/Ieee80211MgmtStaDiscovery_1.test",
+      "tests/module/Ieee80211MgmtStaLifecycle_1.test",
+      "tests/module/Ieee80211MgmtStaSimplifiedInitialization_1.test",
+      "tests/module/Ieee80211MgmtStateCommit_1.test",
+      "tests/module/Ieee80211RecipientNav_1.test",
+      "tests/module/Ieee80211VhtHtCapabilities_1.test",
+      "tests/module/Ieee80211VhtHtSupport_1.test",
+      "tests/protocol/wifi/11ac/Ac_BlockAckFallback.test",
+      "tests/protocol/wifi/11n/WifiHtAssociation.test",
+      "tests/protocol/wifi/common/WifiDeauth.test",
+      "tests/protocol/wifi/common/WifiLocalInterframeInputs.test",
+      "tests/protocol/wifi/common/WifiRifsPermission.test",
+      "tests/unit/Ieee80211HtCapabilities_1.test",
+      "tests/unit/Ieee80211MibAssociationId_1.test",
+      "tests/unit/Ieee80211MibBssTeardown_1.test",
+      "tests/unit/Ieee80211MibPeerTeardown_1.test",
+      "tests/unit/Ieee80211MibStateCommit_1.test",
+      "tests/unit/Ieee80211PeerModeSelection_1.test",
+      "tests/unit/Ieee80211ResponseModeSelection_1.test"
+    ],
+    "test_files": [
+      "tests/module/Ieee80211AgentStaReassociation_1.test",
+      "tests/module/Ieee80211BasicCompatibility_1.test",
+      "tests/module/Ieee80211BlockAckAssociationReset_1.test",
+      "tests/module/Ieee80211BlockAckScheduling_1.test",
+      "tests/module/Ieee80211CompressedBlockAckAdmission_1.test",
+      "tests/module/Ieee80211CompressedBlockAckExchange_1.test",
+      "tests/module/Ieee80211CompressedBlockAckOriginator_1.test",
+      "tests/module/Ieee80211ConfigurationContracts_1.test",
+      "tests/module/Ieee80211HcfManagementRecovery_1.test",
+      "tests/module/Ieee80211HcfMultipleProtection_2.test",
+      "tests/module/Ieee80211HtAntennaRateControl_1.test",
+      "tests/module/Ieee80211HtAssociation_1.test",
+      "tests/module/Ieee80211HtCapabilityPreparation_1.test",
+      "tests/module/Ieee80211MgmtApChannelChange_1.test",
+      "tests/module/Ieee80211MgmtApGenericRadio_1.test",
+      "tests/module/Ieee80211MgmtApHcfQueueDrop_1.test",
+      "tests/module/Ieee80211MgmtApHcfRtsTimeout_1.test",
+      "tests/module/Ieee80211MgmtApLifecycle_1.test",
+      "tests/module/Ieee80211MgmtApMalformedHtCap_1.test",
+      "tests/module/Ieee80211MgmtApQueueDrop_1.test",
+      "tests/module/Ieee80211MgmtApReassociationSnapshot_1.test",
+      "tests/module/Ieee80211MgmtApTimeout_1.test",
+      "tests/module/Ieee80211MgmtRatePublication_1.test",
+      "tests/module/Ieee80211MgmtStaBeaconUpdate_1.test",
+      "tests/module/Ieee80211MgmtStaDeauthentication_1.test",
+      "tests/module/Ieee80211MgmtStaDisassociation_1.test",
+      "tests/module/Ieee80211MgmtStaDiscovery_1.test",
+      "tests/module/Ieee80211MgmtStaLifecycle_1.test",
+      "tests/module/Ieee80211MgmtStaSimplifiedInitialization_1.test",
+      "tests/module/Ieee80211MgmtStateCommit_1.test",
+      "tests/module/Ieee80211RecipientNav_1.test",
+      "tests/module/Ieee80211VhtHtCapabilities_1.test",
+      "tests/module/Ieee80211VhtHtSupport_1.test",
+      "tests/protocol/wifi/11ac/Ac_BlockAckFallback.test",
+      "tests/protocol/wifi/11n/WifiHtAssociation.test",
+      "tests/protocol/wifi/common/WifiDeauth.test",
+      "tests/protocol/wifi/common/WifiLocalInterframeInputs.test",
+      "tests/protocol/wifi/common/WifiRifsPermission.test",
+      "tests/unit/Ieee80211HtCapabilities_1.test",
+      "tests/unit/Ieee80211MibAssociationId_1.test",
+      "tests/unit/Ieee80211MibBssTeardown_1.test",
+      "tests/unit/Ieee80211MibPeerTeardown_1.test",
+      "tests/unit/Ieee80211MibStateCommit_1.test",
+      "tests/unit/Ieee80211PeerModeSelection_1.test",
+      "tests/unit/Ieee80211ResponseModeSelection_1.test"
+    ],
+    "reviewer_documents": [],
+    "plan_files": [
+      "plan/done/80211htcapop-refactor-v3-evidence.md",
+      "plan/done/80211htcapop-refactor-v3.md"
+    ],
+    "publication_commits": [],
+    "excluded": true,
+    "disposition": "Excluded: separate Wi-Fi work; retain pinned-target contents on its exclusive paths."
+  },
+  {
+    "sha": "ae681ef355f67e3160a15fb0b9eccfe3e506506e",
+    "subject": "ieee80211: refactor: separate the read-only mode-set provider",
+    "paths": [
+      "doc/project/design/ieee80211-model-architecture.md",
+      "doc/src/migration-guide/development/ieee80211-capability-bss-state-ownership.rst",
+      "doc/whatsnew/incompatible/ieee80211-capability-bss-state-ownership.txt",
+      "src/inet/linklayer/ieee80211/mac/common/ModeSetModuleBase.h",
+      "src/inet/linklayer/ieee80211/mac/contract/IIeee80211MacConfiguration.h",
+      "src/inet/linklayer/ieee80211/mac/contract/IIeee80211MacConfiguration.ned",
+      "src/inet/linklayer/ieee80211/mac/contract/IIeee80211ModeSetProvider.h",
+      "src/inet/linklayer/ieee80211/mac/contract/IIeee80211ModeSetProvider.ned",
+      "tests/module/Ieee80211ConfigurationContracts_1.test"
+    ],
+    "test_files": [
+      "tests/module/Ieee80211ConfigurationContracts_1.test"
+    ],
+    "reviewer_documents": [],
+    "plan_files": [],
+    "publication_commits": [],
+    "excluded": true,
+    "disposition": "Excluded: separate Wi-Fi work; retain pinned-target contents on its exclusive paths."
+  },
+  {
+    "sha": "5d493a9a7aece470b0571f02d9edae0616f39899",
+    "subject": "plan: add: actionable 6LoWPAN implementation sequence",
+    "paths": [
+      "plan/pending/6lowpan-implementation-plan.md",
+      "plan/pending/6lowpan-initial-plan.md"
+    ],
+    "test_files": [],
+    "reviewer_documents": [],
+    "plan_files": [
+      "plan/pending/6lowpan-implementation-plan.md",
+      "plan/pending/6lowpan-initial-plan.md"
+    ],
+    "publication_commits": [
+      "C00",
+      "C41"
+    ],
+    "excluded": false,
+    "disposition": "Consolidate applicable contract in C00; preserve executed revision as historical provenance at C41."
+  },
+  {
+    "sha": "4a5fe385a0ffcf91e8b64db541fd2b19d9d83f0a",
+    "subject": "doc: add: 6LoWPAN standards references and statement catalogs",
+    "paths": [
+      "doc/project/README.md",
+      "doc/project/evidence/protocol/6lowpan/standards.md",
+      "doc/project/evidence/standard/rfc4944/catalog.md",
+      "doc/project/evidence/standard/rfc4944/rfc4944.txt",
+      "doc/project/evidence/standard/rfc6282/catalog.md",
+      "doc/project/evidence/standard/rfc6282/rfc6282.txt",
+      "doc/project/evidence/standard/rfc6775/catalog.md",
+      "doc/project/evidence/standard/rfc6775/rfc6775.txt",
+      "doc/project/evidence/standard/rfc8025/catalog.md",
+      "doc/project/evidence/standard/rfc8025/rfc8025.txt",
+      "doc/project/evidence/standard/rfc8066/catalog.md",
+      "doc/project/evidence/standard/rfc8066/rfc8066.txt",
+      "doc/project/evidence/standard/rfc8505/catalog.md",
+      "doc/project/evidence/standard/rfc8505/rfc8505.txt",
+      "doc/project/evidence/standard/rfc8930/catalog.md",
+      "doc/project/evidence/standard/rfc8930/rfc8930.txt",
+      "doc/project/evidence/standard/rfc8931/catalog.md",
+      "doc/project/evidence/standard/rfc8931/rfc8931.txt"
+    ],
+    "test_files": [],
+    "reviewer_documents": [],
+    "plan_files": [],
+    "publication_commits": [
+      "C00",
+      "C41"
+    ],
+    "excluded": false,
+    "disposition": "Standards-only sources first; preserve historical provenance at final acceptance."
+  },
+  {
+    "sha": "3e36c1f24ade98c4882423c485bfffd3f176b6f8",
+    "subject": "plan: change: clarify 6LoWPAN implementation contracts and milestone gates",
+    "paths": [
+      "plan/pending/6lowpan-implementation-plan.md"
+    ],
+    "test_files": [],
+    "reviewer_documents": [],
+    "plan_files": [
+      "plan/pending/6lowpan-implementation-plan.md"
+    ],
+    "publication_commits": [
+      "C00",
+      "C41"
+    ],
+    "excluded": false,
+    "disposition": "Consolidate applicable contract in C00; preserve executed revision as historical provenance at C41."
+  },
+  {
+    "sha": "00b12539506e075dff2733add2324845f44b0589",
+    "subject": "icmpv6: fix: computed wire checksums and error packet sizing",
+    "paths": [
+      "doc/src/migration-guide/development/icmpv6-computed-checksums.rst",
+      "doc/whatsnew/incompatible/icmpv6-computed-checksums.txt",
+      "src/inet/networklayer/icmpv6/Icmpv6.cc",
+      "src/inet/networklayer/icmpv6/Icmpv6.h",
+      "src/inet/networklayer/icmpv6/Icmpv6.ned",
+      "src/inet/networklayer/icmpv6/Icmpv6ProtocolDissector.cc",
+      "tests/module/Icmpv6ExtensionChecksum.test",
+      "tests/module/Icmpv6LocalChecksum.test",
+      "tests/unit/Icmpv6PseudoHeader.test"
+    ],
+    "test_files": [
+      "tests/module/Icmpv6ExtensionChecksum.test",
+      "tests/module/Icmpv6LocalChecksum.test",
+      "tests/unit/Icmpv6PseudoHeader.test"
+    ],
+    "reviewer_documents": [],
+    "plan_files": [],
+    "publication_commits": [
+      "C02"
+    ],
+    "excluded": false,
+    "disposition": "Port delta with its original test/document/registration obligations."
+  },
+  {
+    "sha": "4a09854a62b81c246e82237d5f9d025303e58c40",
+    "subject": "ieee802154: add: support explicit opaque payload boundaries",
+    "paths": [
+      "doc/whatsnew/compatible/ieee802154-opaque-payload-boundaries.txt",
+      "src/inet/linklayer/ieee802154/Ieee802154Mac.cc",
+      "src/inet/linklayer/ieee802154/Ieee802154Mac.h",
+      "src/inet/linklayer/ieee802154/Ieee802154Mac.ned",
+      "tests/module/Ieee802154ReceiveMetadata.test",
+      "tests/module/LowpanOpaquePayload.test",
+      "tests/module/LowpanPayloadProtocolMismatch.test",
+      "tests/module/LowpanPayloadUnknownProtocol.test"
+    ],
+    "test_files": [
+      "tests/module/Ieee802154ReceiveMetadata.test",
+      "tests/module/LowpanOpaquePayload.test",
+      "tests/module/LowpanPayloadProtocolMismatch.test",
+      "tests/module/LowpanPayloadUnknownProtocol.test"
+    ],
+    "reviewer_documents": [],
+    "plan_files": [],
+    "publication_commits": [
+      "C04"
+    ],
+    "excluded": false,
+    "disposition": "Port delta with its original test/document/registration obligations."
+  },
+  {
+    "sha": "6a11f885acd503273abd53ab47d546f12b38b41e",
+    "subject": "lowpan: add: the native IPv6 adaptation data plane",
+    "paths": [
+      ".oppfeatures",
+      "doc/project/audit/seal-list.md",
+      "doc/project/design/decisions.md",
+      "doc/project/evidence/model/6lowpan/coverage.md",
+      "doc/project/evidence/model/6lowpan/encoding-profile.md",
+      "doc/project/evidence/model/6lowpan/link-contract.md",
+      "doc/project/evidence/model/6lowpan/native-capture.tsv",
+      "doc/project/evidence/model/6lowpan/native-udp-capture.tsv",
+      "doc/project/evidence/model/6lowpan/p1-contract.md",
+      "doc/project/evidence/model/6lowpan/source-hashes.sha256",
+      "doc/project/evidence/protocol/6lowpan/checks/check-capture.py",
+      "doc/project/evidence/protocol/6lowpan/checks/data-plane.md",
+      "doc/project/evidence/protocol/6lowpan/checks/peer/README.md",
+      "doc/project/evidence/protocol/6lowpan/checks/peer/elided-expected.hex",
+      "doc/project/evidence/protocol/6lowpan/checks/peer/elided-input.hex",
+      "doc/project/evidence/protocol/6lowpan/checks/peer/elided-ns3-observed.hex",
+      "doc/project/evidence/protocol/6lowpan/checks/peer/inet-encoded.hex",
+      "doc/project/evidence/protocol/6lowpan/checks/peer/inet-original.hex",
+      "doc/project/evidence/protocol/6lowpan/checks/peer/ns3-decoded.hex",
+      "doc/project/evidence/protocol/6lowpan/checks/peer/ns3-encoded.hex",
+      "doc/project/evidence/protocol/6lowpan/checks/peer/ns3-vector-peer.cc",
+      "doc/project/evidence/protocol/6lowpan/checks/peer/run.sh",
+      "doc/project/evidence/protocol/6lowpan/features.md",
+      "doc/project/evidence/standard/rfc6282/catalog.md",
+      "doc/src/users-guide/ch-802154.rst",
+      "doc/whatsnew/compatible/lowpan-native-ipv6-data-plane.txt",
+      "examples/lowpan/LowpanNetwork.ned",
+      "examples/lowpan/LowpanRouteNetwork.ned",
+      "examples/lowpan/README.md",
+      "examples/lowpan/omnetpp.ini",
+      "examples/lowpan/package.ned",
+      "examples/lowpan/route.ini",
+      "examples/lowpan/route.xml",
+      "plan/pending/6lowpan-implementation-plan.md",
+      "src/inet/linklayer/ieee802154/Ieee802154Address.cc",
+      "src/inet/linklayer/ieee802154/Ieee802154Address.h",
+      "src/inet/linklayer/ieee802154/Ieee802154Address.msg",
+      "src/inet/linklayer/ieee802154/Ieee802154AddressTagBase.msg",
+      "src/inet/linklayer/ieee802154/Ieee802154FrameFormat.h",
+      "src/inet/linklayer/ieee802154/Ieee802154FrameHeader.msg",
+      "src/inet/linklayer/ieee802154/Ieee802154FrameHeaderSerializer.cc",
+      "src/inet/linklayer/ieee802154/Ieee802154FrameHeaderSerializer.h",
+      "src/inet/linklayer/lowpan/Ieee802154LowpanInterface.ned",
+      "src/inet/linklayer/lowpan/Ieee802154NativeLowpanInterface.ned",
+      "src/inet/linklayer/lowpan/LowpanBoundaryBase.cc",
+      "src/inet/linklayer/lowpan/LowpanBoundaryBase.h",
+      "src/inet/linklayer/lowpan/LowpanCompatibilityBoundary.cc",
+      "src/inet/linklayer/lowpan/LowpanCompatibilityBoundary.h",
+      "src/inet/linklayer/lowpan/LowpanCompatibilityBoundary.ned",
+      "src/inet/linklayer/lowpan/LowpanCompatibilityMac.cc",
+      "src/inet/linklayer/lowpan/LowpanCompatibilityMac.h",
+      "src/inet/linklayer/lowpan/LowpanCompatibilityMac.ned",
+      "src/inet/linklayer/lowpan/LowpanDatagramTagAllocator.cc",
+      "src/inet/linklayer/lowpan/LowpanDatagramTagAllocator.h",
+      "src/inet/linklayer/lowpan/LowpanFrag1Header.msg",
+      "src/inet/linklayer/lowpan/LowpanFrag1HeaderSerializer.cc",
+      "src/inet/linklayer/lowpan/LowpanFrag1HeaderSerializer.h",
+      "src/inet/linklayer/lowpan/LowpanFragmenter.cc",
+      "src/inet/linklayer/lowpan/LowpanFragmenter.h",
+      "src/inet/linklayer/lowpan/LowpanFragnHeader.msg",
+      "src/inet/linklayer/lowpan/LowpanFragnHeaderSerializer.cc",
+      "src/inet/linklayer/lowpan/LowpanFragnHeaderSerializer.h",
+      "src/inet/linklayer/lowpan/LowpanHeader.msg",
+      "src/inet/linklayer/lowpan/LowpanHeaderSerializer.cc",
+      "src/inet/linklayer/lowpan/LowpanHeaderSerializer.h",
+      "src/inet/linklayer/lowpan/LowpanIphcCodec.cc",
+      "src/inet/linklayer/lowpan/LowpanIphcCodec.h",
+      "src/inet/linklayer/lowpan/LowpanIphcHeader.msg",
+      "src/inet/linklayer/lowpan/LowpanIphcHeaderSerializer.cc",
+      "src/inet/linklayer/lowpan/LowpanIphcHeaderSerializer.h",
+      "src/inet/linklayer/lowpan/LowpanIpv6.cc",
+      "src/inet/linklayer/lowpan/LowpanIpv6.h",
+      "src/inet/linklayer/lowpan/LowpanIpv6.ned",
+      "src/inet/linklayer/lowpan/LowpanIpv6NeighbourDiscovery.cc",
+      "src/inet/linklayer/lowpan/LowpanIpv6NeighbourDiscovery.h",
+      "src/inet/linklayer/lowpan/LowpanIpv6NeighbourDiscovery.ned",
+      "src/inet/linklayer/lowpan/LowpanIpv6NetworkLayer.ned",
+      "src/inet/linklayer/lowpan/LowpanLayer.cc",
+      "src/inet/linklayer/lowpan/LowpanLayer.h",
+      "src/inet/linklayer/lowpan/LowpanLayer.ned",
+      "src/inet/linklayer/lowpan/LowpanLinkAddressMap.cc",
+      "src/inet/linklayer/lowpan/LowpanLinkAddressMap.h",
+      "src/inet/linklayer/lowpan/LowpanLinkDomain.cc",
+      "src/inet/linklayer/lowpan/LowpanLinkDomain.h",
+      "src/inet/linklayer/lowpan/LowpanLinkDomain.ned",
+      "src/inet/linklayer/lowpan/LowpanNativeBoundary.cc",
+      "src/inet/linklayer/lowpan/LowpanNativeBoundary.h",
+      "src/inet/linklayer/lowpan/LowpanNativeBoundary.ned",
+      "src/inet/linklayer/lowpan/LowpanNativeLinkDomain.cc",
+      "src/inet/linklayer/lowpan/LowpanNativeLinkDomain.h",
+      "src/inet/linklayer/lowpan/LowpanNativeLinkDomain.ned",
+      "src/inet/linklayer/lowpan/LowpanNativeMac.cc",
+      "src/inet/linklayer/lowpan/LowpanNativeMac.h",
+      "src/inet/linklayer/lowpan/LowpanNativeMac.ned",
+      "src/inet/linklayer/lowpan/LowpanNativePcapHelper.cc",
+      "src/inet/linklayer/lowpan/LowpanNativePcapHelper.h",
+      "src/inet/linklayer/lowpan/LowpanNativeProtocolDissector.cc",
+      "src/inet/linklayer/lowpan/LowpanNativeProtocolDissector.h",
+      "src/inet/linklayer/lowpan/LowpanPacketDropDetails.msg",
+      "src/inet/linklayer/lowpan/LowpanProtocol.cc",
+      "src/inet/linklayer/lowpan/LowpanProtocol.h",
+      "src/inet/linklayer/lowpan/LowpanProtocolDissector.cc",
+      "src/inet/linklayer/lowpan/LowpanProtocolDissector.h",
+      "src/inet/linklayer/lowpan/LowpanProtocolPrinter.cc",
+      "src/inet/linklayer/lowpan/LowpanProtocolPrinter.h",
+      "src/inet/linklayer/lowpan/LowpanRadioProfile.cc",
+      "src/inet/linklayer/lowpan/LowpanRadioProfile.h",
+      "src/inet/linklayer/lowpan/LowpanReassemblyTable.cc",
+      "src/inet/linklayer/lowpan/LowpanReassemblyTable.h",
+      "src/inet/linklayer/lowpan/LowpanTransmissionReq.msg",
+      "src/inet/linklayer/lowpan/LowpanUdpNhcCodec.cc",
+      "src/inet/linklayer/lowpan/LowpanUdpNhcCodec.h",
+      "src/inet/linklayer/lowpan/LowpanUdpNhcHeader.msg",
+      "src/inet/linklayer/lowpan/LowpanUdpNhcHeaderSerializer.cc",
+      "src/inet/linklayer/lowpan/LowpanUdpNhcHeaderSerializer.h",
+      "src/inet/linklayer/lowpan/contract/ILowpanLayer.ned",
+      "src/inet/linklayer/lowpan/contract/ILowpanLink.h",
+      "src/inet/linklayer/lowpan/contract/ILowpanLink.ned",
+      "src/inet/linklayer/lowpan/contract/ILowpanMac.h",
+      "src/inet/linklayer/lowpan/package.ned",
+      "tests/module/LowpanBoundaryExternalBuffer.test",
+      "tests/module/LowpanBoundaryWrongDomain.test",
+      "tests/module/LowpanCompatibilityBoundary.test",
+      "tests/module/LowpanCompressionBudget.test",
+      "tests/module/LowpanDeadlinePropagation.test",
+      "tests/module/LowpanDomainAliasCollision.test",
+      "tests/module/LowpanDomainMovingRadio.test",
+      "tests/module/LowpanDomainPlainMac.test",
+      "tests/module/LowpanDomainRadioDelay.test",
+      "tests/module/LowpanDomainSharedMedium.test",
+      "tests/module/LowpanDomainUnlistedRadio.test",
+      "tests/module/LowpanForwardedPtb.test",
+      "tests/module/LowpanFragmentQueueRefusal.test",
+      "tests/module/LowpanFragmented1280.test",
+      "tests/module/LowpanFragmentedLifecycle.test",
+      "tests/module/LowpanIphc1280.test",
+      "tests/module/LowpanIphcReceiveMatrix.test",
+      "tests/module/LowpanLinkDomain.test",
+      "tests/module/LowpanLowerLifetime.test",
+      "tests/module/LowpanMalformedReceive.test",
+      "tests/module/LowpanMixedNeighbourDiscovery.test",
+      "tests/module/LowpanNative1280.test",
+      "tests/module/LowpanNativeAckPropagation.test",
+      "tests/module/LowpanNativeBoundaryWrongDomain.test",
+      "tests/module/LowpanNativeCcaPulse.test",
+      "tests/module/LowpanNativeDeadlineBoundary.test",
+      "tests/module/LowpanNativeDomainDuplicateAddress.test",
+      "tests/module/LowpanNativeDomainMovingRadio.test",
+      "tests/module/LowpanNativeDomainRadioDelay.test",
+      "tests/module/LowpanNativeDomainSharedMedium.test",
+      "tests/module/LowpanNativeDomainUnlistedRadio.test",
+      "tests/module/LowpanNativeEnvelope.test",
+      "tests/module/LowpanNativeForwardedPtb.test",
+      "tests/module/LowpanNativeIpv6Fragment.test",
+      "tests/module/LowpanNativeLifecycle.test",
+      "tests/module/LowpanNativeLifetime.test",
+      "tests/module/LowpanNativeReceive.test",
+      "tests/module/LowpanNativeRetry.test",
+      "tests/module/LowpanNativeRetryEnvelope.test",
+      "tests/module/LowpanNativeRetryExhaustion.test",
+      "tests/module/LowpanNativeRouteOver.test",
+      "tests/module/LowpanNativeTurnaroundLifecycle.test",
+      "tests/module/LowpanNativeTwoFlows.test",
+      "tests/module/LowpanNativeUdp.test",
+      "tests/module/LowpanNativeUncompressedExchange.test",
+      "tests/module/LowpanPeerReceive.test",
+      "tests/module/LowpanQueuedEnvelope.test",
+      "tests/module/LowpanQueuedRouteOver.test",
+      "tests/module/LowpanReassemblyExpiry.test",
+      "tests/module/LowpanRetryEnvelope.test",
+      "tests/module/LowpanRetryLifetime.test",
+      "tests/module/LowpanRouteOver.test",
+      "tests/module/LowpanUdpNhc.test",
+      "tests/module/LowpanUncompressedExchange.test",
+      "tests/module/LowpanUncompressedLifecycle.test",
+      "tests/module/LowpanUncompressedUdp.test",
+      "tests/networks/lowpan/LowpanNetwork.ned",
+      "tests/networks/lowpan/omnetpp.ini",
+      "tests/networks/lowpan/package.ned",
+      "tests/unit/LowpanDatagramTags.test",
+      "tests/unit/LowpanFragmentation.test",
+      "tests/unit/LowpanIphc.test",
+      "tests/unit/LowpanIphcAcceptMatrix.test",
+      "tests/unit/LowpanLinkAddressMap.test",
+      "tests/unit/LowpanNativeAddress.test",
+      "tests/unit/LowpanNativeFrame.test",
+      "tests/unit/LowpanReassembly.test",
+      "tests/unit/LowpanUdpNhc.test",
+      "tests/unit/LowpanUncompressedDispatch.test"
+    ],
+    "test_files": [
+      "tests/module/LowpanBoundaryExternalBuffer.test",
+      "tests/module/LowpanBoundaryWrongDomain.test",
+      "tests/module/LowpanCompatibilityBoundary.test",
+      "tests/module/LowpanCompressionBudget.test",
+      "tests/module/LowpanDeadlinePropagation.test",
+      "tests/module/LowpanDomainAliasCollision.test",
+      "tests/module/LowpanDomainMovingRadio.test",
+      "tests/module/LowpanDomainPlainMac.test",
+      "tests/module/LowpanDomainRadioDelay.test",
+      "tests/module/LowpanDomainSharedMedium.test",
+      "tests/module/LowpanDomainUnlistedRadio.test",
+      "tests/module/LowpanForwardedPtb.test",
+      "tests/module/LowpanFragmentQueueRefusal.test",
+      "tests/module/LowpanFragmented1280.test",
+      "tests/module/LowpanFragmentedLifecycle.test",
+      "tests/module/LowpanIphc1280.test",
+      "tests/module/LowpanIphcReceiveMatrix.test",
+      "tests/module/LowpanLinkDomain.test",
+      "tests/module/LowpanLowerLifetime.test",
+      "tests/module/LowpanMalformedReceive.test",
+      "tests/module/LowpanMixedNeighbourDiscovery.test",
+      "tests/module/LowpanNative1280.test",
+      "tests/module/LowpanNativeAckPropagation.test",
+      "tests/module/LowpanNativeBoundaryWrongDomain.test",
+      "tests/module/LowpanNativeCcaPulse.test",
+      "tests/module/LowpanNativeDeadlineBoundary.test",
+      "tests/module/LowpanNativeDomainDuplicateAddress.test",
+      "tests/module/LowpanNativeDomainMovingRadio.test",
+      "tests/module/LowpanNativeDomainRadioDelay.test",
+      "tests/module/LowpanNativeDomainSharedMedium.test",
+      "tests/module/LowpanNativeDomainUnlistedRadio.test",
+      "tests/module/LowpanNativeEnvelope.test",
+      "tests/module/LowpanNativeForwardedPtb.test",
+      "tests/module/LowpanNativeIpv6Fragment.test",
+      "tests/module/LowpanNativeLifecycle.test",
+      "tests/module/LowpanNativeLifetime.test",
+      "tests/module/LowpanNativeReceive.test",
+      "tests/module/LowpanNativeRetry.test",
+      "tests/module/LowpanNativeRetryEnvelope.test",
+      "tests/module/LowpanNativeRetryExhaustion.test",
+      "tests/module/LowpanNativeRouteOver.test",
+      "tests/module/LowpanNativeTurnaroundLifecycle.test",
+      "tests/module/LowpanNativeTwoFlows.test",
+      "tests/module/LowpanNativeUdp.test",
+      "tests/module/LowpanNativeUncompressedExchange.test",
+      "tests/module/LowpanPeerReceive.test",
+      "tests/module/LowpanQueuedEnvelope.test",
+      "tests/module/LowpanQueuedRouteOver.test",
+      "tests/module/LowpanReassemblyExpiry.test",
+      "tests/module/LowpanRetryEnvelope.test",
+      "tests/module/LowpanRetryLifetime.test",
+      "tests/module/LowpanRouteOver.test",
+      "tests/module/LowpanUdpNhc.test",
+      "tests/module/LowpanUncompressedExchange.test",
+      "tests/module/LowpanUncompressedLifecycle.test",
+      "tests/module/LowpanUncompressedUdp.test",
+      "tests/unit/LowpanDatagramTags.test",
+      "tests/unit/LowpanFragmentation.test",
+      "tests/unit/LowpanIphc.test",
+      "tests/unit/LowpanIphcAcceptMatrix.test",
+      "tests/unit/LowpanLinkAddressMap.test",
+      "tests/unit/LowpanNativeAddress.test",
+      "tests/unit/LowpanNativeFrame.test",
+      "tests/unit/LowpanReassembly.test",
+      "tests/unit/LowpanUdpNhc.test",
+      "tests/unit/LowpanUncompressedDispatch.test"
+    ],
+    "reviewer_documents": [],
+    "plan_files": [
+      "plan/pending/6lowpan-implementation-plan.md"
+    ],
+    "publication_commits": [
+      "C05",
+      "C06"
+    ],
+    "excluded": false,
+    "disposition": "C05 owns only8generic address/frame inputs+2units; C06 owns all remaining native/adaptation behavior."
+  },
+  {
+    "sha": "fde06276347eb9e5f0ab308d1e345540a5f4f3cf",
+    "subject": "tests: add: native 6LoWPAN boundary protocol coverage",
+    "paths": [
+      "doc/project/evidence/model/6lowpan/coverage.md",
+      "doc/project/evidence/model/6lowpan/errata-20261115.json",
+      "doc/project/evidence/model/6lowpan/peer-elided-result.json",
+      "doc/project/evidence/model/6lowpan/provenance.md",
+      "doc/project/evidence/model/6lowpan/release-captures.tsv",
+      "doc/project/evidence/model/6lowpan/release-validation.md",
+      "doc/project/evidence/model/6lowpan/release-verification.json",
+      "doc/project/evidence/model/6lowpan/source-hashes.sha256",
+      "doc/project/evidence/protocol/6lowpan/checks/peer/README.md",
+      "plan/pending/6lowpan-implementation-plan.md",
+      "tests/module/LowpanIphcReceiveMatrix.test",
+      "tests/protocol/6lowpan/LowpanNativeFragmentBoundaries.test",
+      "tests/protocol/6lowpan/LowpanNativeReassembly.test",
+      "tests/protocol/6lowpan/native-reassembly.md",
+      "tests/unit/LowpanFragmentation.test"
+    ],
+    "test_files": [
+      "tests/module/LowpanIphcReceiveMatrix.test",
+      "tests/protocol/6lowpan/LowpanNativeFragmentBoundaries.test",
+      "tests/protocol/6lowpan/LowpanNativeReassembly.test",
+      "tests/unit/LowpanFragmentation.test"
+    ],
+    "reviewer_documents": [
+      "tests/protocol/6lowpan/native-reassembly.md"
+    ],
+    "plan_files": [
+      "plan/pending/6lowpan-implementation-plan.md"
+    ],
+    "publication_commits": [
+      "C06"
+    ],
+    "excluded": false,
+    "disposition": "Fold all behavior-owned fixtures/documents and unit/matrix expansions into C06."
+  },
+  {
+    "sha": "9332039b2ddfcc449a66d92f9e767eca620f2734",
+    "subject": "tests: add: native 6LoWPAN reassembly identity isolation",
+    "paths": [
+      "doc/project/evidence/model/6lowpan/p7-closure.json",
+      "doc/project/evidence/model/6lowpan/release-validation.md",
+      "plan/pending/6lowpan-implementation-plan.md",
+      "tests/protocol/6lowpan/LowpanNativeIdentityIsolation.test",
+      "tests/protocol/6lowpan/native-identity.md"
+    ],
+    "test_files": [
+      "tests/protocol/6lowpan/LowpanNativeIdentityIsolation.test"
+    ],
+    "reviewer_documents": [
+      "tests/protocol/6lowpan/native-identity.md"
+    ],
+    "plan_files": [
+      "plan/pending/6lowpan-implementation-plan.md"
+    ],
+    "publication_commits": [
+      "C06"
+    ],
+    "excluded": false,
+    "disposition": "Fold all behavior-owned fixtures/documents and unit/matrix expansions into C06."
+  },
+  {
+    "sha": "a36e789a702f07dff6aab2a66c58ebe061796e1c",
+    "subject": "tests: add: native 6LoWPAN receive restart coverage",
+    "paths": [
+      "doc/project/evidence/model/6lowpan/p7-closure.json",
+      "doc/project/evidence/model/6lowpan/release-validation.md",
+      "tests/protocol/6lowpan/LowpanNativeReceiveRestart.test",
+      "tests/protocol/6lowpan/native-receive-restart.md"
+    ],
+    "test_files": [
+      "tests/protocol/6lowpan/LowpanNativeReceiveRestart.test"
+    ],
+    "reviewer_documents": [
+      "tests/protocol/6lowpan/native-receive-restart.md"
+    ],
+    "plan_files": [],
+    "publication_commits": [
+      "C06"
+    ],
+    "excluded": false,
+    "disposition": "Fold all behavior-owned fixtures/documents and unit/matrix expansions into C06."
+  },
+  {
+    "sha": "52407824e633f986a6054a041baae7fb1817ceff",
+    "subject": "tests: add: native 6LoWPAN sender tag guard coverage",
+    "paths": [
+      "doc/project/evidence/model/6lowpan/p7-closure.json",
+      "doc/project/evidence/model/6lowpan/release-validation.md",
+      "tests/protocol/6lowpan/LowpanNativeTagGuards.test",
+      "tests/protocol/6lowpan/native-tag-guards.md"
+    ],
+    "test_files": [
+      "tests/protocol/6lowpan/LowpanNativeTagGuards.test"
+    ],
+    "reviewer_documents": [
+      "tests/protocol/6lowpan/native-tag-guards.md"
+    ],
+    "plan_files": [],
+    "publication_commits": [
+      "C06"
+    ],
+    "excluded": false,
+    "disposition": "Fold all behavior-owned fixtures/documents and unit/matrix expansions into C06."
+  },
+  {
+    "sha": "c839f4328f8320b86883dc002beb459a3d9dc544",
+    "subject": "plan: location: archive the native 6LoWPAN first-release plan",
+    "paths": [
+      "plan/done/6lowpan-implementation-plan.md",
+      "plan/pending/6lowpan-implementation-plan.md"
+    ],
+    "test_files": [],
+    "reviewer_documents": [],
+    "plan_files": [
+      "plan/done/6lowpan-implementation-plan.md",
+      "plan/pending/6lowpan-implementation-plan.md"
+    ],
+    "publication_commits": [
+      "C41"
+    ],
+    "excluded": false,
+    "disposition": "Retain original archived snapshot; C42 archives a different, new publication plan."
+  },
+  {
+    "sha": "32bf7b81d76081bda810065643b2f51afa55ad54",
+    "subject": "doc: change: close bounded 6LoWPAN first-release validation",
+    "paths": [
+      "doc/project/evidence/model/6lowpan/coverage.md",
+      "doc/project/evidence/model/6lowpan/link-contract.md",
+      "doc/project/evidence/model/6lowpan/p7-closure.json",
+      "doc/project/evidence/model/6lowpan/provenance.md",
+      "doc/project/evidence/model/6lowpan/release-validation.md",
+      "doc/project/evidence/model/6lowpan/release-verification.json",
+      "doc/project/evidence/protocol/6lowpan/checks/peer/README.md",
+      "doc/src/users-guide/ch-802154.rst",
+      "examples/lowpan/README.md",
+      "plan/done/6lowpan-implementation-plan.md",
+      "tests/protocol/6lowpan/native-identity.md",
+      "tests/protocol/6lowpan/native-reassembly.md",
+      "tests/protocol/6lowpan/native-receive-restart.md",
+      "tests/protocol/6lowpan/native-tag-guards.md"
+    ],
+    "test_files": [],
+    "reviewer_documents": [
+      "tests/protocol/6lowpan/native-identity.md",
+      "tests/protocol/6lowpan/native-reassembly.md",
+      "tests/protocol/6lowpan/native-receive-restart.md",
+      "tests/protocol/6lowpan/native-tag-guards.md"
+    ],
+    "plan_files": [
+      "plan/done/6lowpan-implementation-plan.md"
+    ],
+    "publication_commits": [
+      "C07",
+      "C41"
+    ],
+    "excluded": false,
+    "disposition": "First-release acceptance and historical record, with new results kept separate."
+  },
+  {
+    "sha": "58b446708de858028dfd538b602d87c36264590e",
+    "subject": "lowpan: add: stateful IPHC compression contexts",
+    "paths": [
+      "doc/project/evidence/model/6lowpan/completion.md",
+      "doc/project/evidence/model/6lowpan/encoding-profile.md",
+      "doc/project/evidence/model/6lowpan/p8-verification.json",
+      "doc/src/users-guide/ch-802154.rst",
+      "doc/whatsnew/compatible/lowpan-stateful-contexts.txt",
+      "plan/done/6lowpan-implementation-plan.md",
+      "plan/pending/6lowpan-completion.md",
+      "src/inet/linklayer/lowpan/LowpanContextTable.cc",
+      "src/inet/linklayer/lowpan/LowpanContextTable.h",
+      "src/inet/linklayer/lowpan/LowpanIphcCodec.cc",
+      "src/inet/linklayer/lowpan/LowpanIphcCodec.h",
+      "src/inet/linklayer/lowpan/LowpanLayer.cc",
+      "src/inet/linklayer/lowpan/LowpanLayer.h",
+      "src/inet/linklayer/lowpan/LowpanLayer.ned",
+      "tests/protocol/6lowpan/LowpanStatefulContexts.test",
+      "tests/protocol/6lowpan/stateful-contexts.md",
+      "tests/unit/LowpanStatefulContexts.test"
+    ],
+    "test_files": [
+      "tests/protocol/6lowpan/LowpanStatefulContexts.test",
+      "tests/unit/LowpanStatefulContexts.test"
+    ],
+    "reviewer_documents": [
+      "tests/protocol/6lowpan/stateful-contexts.md"
+    ],
+    "plan_files": [
+      "plan/done/6lowpan-implementation-plan.md",
+      "plan/pending/6lowpan-completion.md"
+    ],
+    "publication_commits": [
+      "C08"
+    ],
+    "excluded": false,
+    "disposition": "Port delta with its original test/document/registration obligations."
+  },
+  {
+    "sha": "72f4df44f5fcf8ca29070502782c88a4b6ab3d71",
+    "subject": "lowpan: add: extension NHC wire representation",
+    "paths": [
+      "doc/whatsnew/compatible/lowpan-nhc-wire.txt",
+      "plan/pending/6lowpan-completion.md",
+      "src/inet/linklayer/lowpan/LowpanIphcCodec.cc",
+      "src/inet/linklayer/lowpan/LowpanIphcCodec.h",
+      "src/inet/linklayer/lowpan/LowpanNhcExtensionHeader.msg",
+      "src/inet/linklayer/lowpan/LowpanNhcExtensionHeaderSerializer.cc",
+      "src/inet/linklayer/lowpan/LowpanNhcExtensionHeaderSerializer.h",
+      "src/inet/linklayer/lowpan/LowpanProtocolDissector.cc",
+      "src/inet/linklayer/lowpan/LowpanProtocolPrinter.cc",
+      "tests/unit/LowpanExtensionNhcWire.test"
+    ],
+    "test_files": [
+      "tests/unit/LowpanExtensionNhcWire.test"
+    ],
+    "reviewer_documents": [],
+    "plan_files": [
+      "plan/pending/6lowpan-completion.md"
+    ],
+    "publication_commits": [
+      "C09"
+    ],
+    "excluded": false,
+    "disposition": "Port delta with its original test/document/registration obligations."
+  },
+  {
+    "sha": "96d63e5156894c46bc6ac5f929d3e1d00cee8a70",
+    "subject": "lowpan: add: contiguous extension NHC chain codec",
+    "paths": [
+      "doc/whatsnew/compatible/lowpan-nhc-codec.txt",
+      "src/inet/linklayer/lowpan/LowpanNhcCodec.cc",
+      "src/inet/linklayer/lowpan/LowpanNhcCodec.h",
+      "tests/unit/LowpanNhcChains.test"
+    ],
+    "test_files": [
+      "tests/unit/LowpanNhcChains.test"
+    ],
+    "reviewer_documents": [],
+    "plan_files": [],
+    "publication_commits": [
+      "C10"
+    ],
+    "excluded": false,
+    "disposition": "Port delta with its original test/document/registration obligations."
+  },
+  {
+    "sha": "a012505af0c78460910d53dc65be310546acfb44",
+    "subject": "ipv6: fix: retain decoded Fragment header during local delivery",
+    "paths": [
+      "doc/whatsnew/compatible/ipv6-fragment-chunk-ownership.txt",
+      "plan/pending/6lowpan-completion.md",
+      "src/inet/networklayer/ipv6/Ipv6.cc",
+      "tests/module/Ipv6SerializedFragment.test"
+    ],
+    "test_files": [
+      "tests/module/Ipv6SerializedFragment.test"
+    ],
+    "reviewer_documents": [],
+    "plan_files": [
+      "plan/pending/6lowpan-completion.md"
+    ],
+    "publication_commits": [
+      "C03"
+    ],
+    "excluded": false,
+    "disposition": "Port delta with its original test/document/registration obligations."
+  },
+  {
+    "sha": "68b2b073558066a9f43ffd154313fc2a8cbaa508",
+    "subject": "lowpan: add: extension NHC transmission and reconstruction",
+    "paths": [
+      "doc/project/evidence/model/6lowpan/completion.md",
+      "doc/project/evidence/model/6lowpan/encoding-profile.md",
+      "doc/project/evidence/model/6lowpan/p9-verification.json",
+      "doc/src/users-guide/ch-802154.rst",
+      "doc/whatsnew/compatible/lowpan-extension-nhc.txt",
+      "plan/pending/6lowpan-completion.md",
+      "src/inet/linklayer/lowpan/LowpanLayer.cc",
+      "tests/module/LowpanNativeIpv6Fragment.test",
+      "tests/protocol/6lowpan/LowpanExtensionNhc.test",
+      "tests/protocol/6lowpan/LowpanNativeReassembly.test",
+      "tests/protocol/6lowpan/extension-nhc.md"
+    ],
+    "test_files": [
+      "tests/module/LowpanNativeIpv6Fragment.test",
+      "tests/protocol/6lowpan/LowpanExtensionNhc.test",
+      "tests/protocol/6lowpan/LowpanNativeReassembly.test"
+    ],
+    "reviewer_documents": [
+      "tests/protocol/6lowpan/extension-nhc.md"
+    ],
+    "plan_files": [
+      "plan/pending/6lowpan-completion.md"
+    ],
+    "publication_commits": [
+      "C11"
+    ],
+    "excluded": false,
+    "disposition": "Port delta with its original test/document/registration obligations."
+  },
+  {
+    "sha": "9e670b6fd475955f42d4778df1878eba2b909f4b",
+    "subject": "networklayer: add: ICMPv6 registration wire support",
+    "paths": [
+      "doc/project/evidence/model/6lowpan/nd-wire-verification.json",
+      "doc/project/evidence/model/6lowpan/nd-wire.md",
+      "doc/whatsnew/compatible/icmpv6-registration-wire.txt",
+      "plan/pending/6lowpan-completion.md",
+      "src/inet/networklayer/common/Icmpv6Type.msg",
+      "src/inet/networklayer/icmpv6/Icmpv6HeaderSerializer.cc",
+      "src/inet/networklayer/icmpv6/Icmpv6ProtocolPrinter.cc",
+      "src/inet/networklayer/icmpv6/Ipv6NdMessage.msg",
+      "src/inet/networklayer/icmpv6/Ipv6NeighbourDiscovery.cc",
+      "src/inet/networklayer/icmpv6/Ipv6NeighbourDiscovery.ned",
+      "tests/module/Ipv6NdUnsupportedRegistration.test",
+      "tests/unit/Ipv6NdRegistrationWire.test"
+    ],
+    "test_files": [
+      "tests/module/Ipv6NdUnsupportedRegistration.test",
+      "tests/unit/Ipv6NdRegistrationWire.test"
+    ],
+    "reviewer_documents": [],
+    "plan_files": [
+      "plan/pending/6lowpan-completion.md"
+    ],
+    "publication_commits": [
+      "C13"
+    ],
+    "excluded": false,
+    "disposition": "Port delta with its original test/document/registration obligations."
+  },
+  {
+    "sha": "47453f25255b87c0d1505e674bbf2e7d4b6d5e2b",
+    "subject": "plan: change: define staged native registration and forwarding checks",
+    "paths": [
+      "plan/pending/6lowpan-completion.md"
+    ],
+    "test_files": [],
+    "reviewer_documents": [],
+    "plan_files": [
+      "plan/pending/6lowpan-completion.md"
+    ],
+    "publication_commits": [
+      "C00",
+      "C41"
+    ],
+    "excluded": false,
+    "disposition": "Consolidate applicable contract in C00; preserve executed revision as historical provenance at C41."
+  },
+  {
+    "sha": "d37289ade03049e0473f726df7425f49c077fd04",
+    "subject": "lowpan: add: owned expiring neighbor bindings",
+    "paths": [
+      "doc/whatsnew/compatible/lowpan-owned-bindings.txt",
+      "src/inet/linklayer/lowpan/LowpanNativeLinkDomain.cc",
+      "src/inet/linklayer/lowpan/LowpanNativeLinkDomain.h",
+      "tests/module/LowpanOwnedBindings.test"
+    ],
+    "test_files": [
+      "tests/module/LowpanOwnedBindings.test"
+    ],
+    "reviewer_documents": [],
+    "plan_files": [],
+    "publication_commits": [
+      "C15"
+    ],
+    "excluded": false,
+    "disposition": "Port delta with its original test/document/registration obligations."
+  },
+  {
+    "sha": "2fd73a474a4b7ca00ac20097c2c2790e71ddaa41",
+    "subject": "lowpan: add: native address registration server",
+    "paths": [
+      "doc/project/evidence/model/6lowpan/completion.md",
+      "doc/project/evidence/model/6lowpan/p10-stage1-verification.json",
+      "doc/whatsnew/compatible/lowpan-neighbor-registration.txt",
+      "src/inet/linklayer/lowpan/LowpanIpv6NeighbourDiscovery.cc",
+      "src/inet/linklayer/lowpan/LowpanIpv6NeighbourDiscovery.h",
+      "src/inet/linklayer/lowpan/LowpanIpv6NeighbourDiscovery.ned",
+      "src/inet/linklayer/lowpan/LowpanLayer.cc",
+      "src/inet/linklayer/lowpan/LowpanNativeBoundary.h",
+      "tests/module/LowpanDynamicBindings.test",
+      "tests/protocol/6lowpan/LowpanNeighborRegistration.test",
+      "tests/protocol/6lowpan/neighbor-registration.md"
+    ],
+    "test_files": [
+      "tests/module/LowpanDynamicBindings.test",
+      "tests/protocol/6lowpan/LowpanNeighborRegistration.test"
+    ],
+    "reviewer_documents": [
+      "tests/protocol/6lowpan/neighbor-registration.md"
+    ],
+    "plan_files": [],
+    "publication_commits": [
+      "C16"
+    ],
+    "excluded": false,
+    "disposition": "Port delta with its original test/document/registration obligations."
+  },
+  {
+    "sha": "f2519ddc8c729a1108ad8148de3b15ca250e1a0d",
+    "subject": "plan: change: pin discovery timing and host lifetime contracts",
+    "paths": [
+      "plan/pending/6lowpan-completion.md"
+    ],
+    "test_files": [],
+    "reviewer_documents": [],
+    "plan_files": [
+      "plan/pending/6lowpan-completion.md"
+    ],
+    "publication_commits": [
+      "C00",
+      "C41"
+    ],
+    "excluded": false,
+    "disposition": "Consolidate applicable contract in C00; preserve executed revision as historical provenance at C41."
+  },
+  {
+    "sha": "90d1e36711d80ffd68fb5589e66295667972a6fe",
+    "subject": "ipv6: add: query interface address validity",
+    "paths": [
+      "doc/project/evidence/model/6lowpan/ipv6-validity-verification.json",
+      "doc/whatsnew/compatible/ipv6-address-validity.txt",
+      "src/inet/networklayer/ipv6/Ipv6InterfaceData.cc",
+      "src/inet/networklayer/ipv6/Ipv6InterfaceData.h",
+      "tests/unit/Ipv6AddressLifetimes.test"
+    ],
+    "test_files": [
+      "tests/unit/Ipv6AddressLifetimes.test"
+    ],
+    "reviewer_documents": [],
+    "plan_files": [],
+    "publication_commits": [
+      "C14"
+    ],
+    "excluded": false,
+    "disposition": "Port delta with its original test/document/registration obligations."
+  },
+  {
+    "sha": "29214e905b4d82557628b80b8e26b5b51815de17",
+    "subject": "lowpan: add: native router advertisements",
+    "paths": [
+      "doc/project/evidence/model/6lowpan/completion.md",
+      "doc/project/evidence/model/6lowpan/p10-router-verification.json",
+      "doc/whatsnew/compatible/lowpan-router-discovery.txt",
+      "src/inet/linklayer/lowpan/LowpanIpv6NeighbourDiscovery.cc",
+      "src/inet/linklayer/lowpan/LowpanIpv6NeighbourDiscovery.h",
+      "src/inet/linklayer/lowpan/LowpanIpv6NeighbourDiscovery.ned",
+      "tests/protocol/6lowpan/LowpanRouterDiscovery.test",
+      "tests/protocol/6lowpan/router-discovery.md"
+    ],
+    "test_files": [
+      "tests/protocol/6lowpan/LowpanRouterDiscovery.test"
+    ],
+    "reviewer_documents": [
+      "tests/protocol/6lowpan/router-discovery.md"
+    ],
+    "plan_files": [],
+    "publication_commits": [
+      "C17"
+    ],
+    "excluded": false,
+    "disposition": "Port delta with its original test/document/registration obligations."
+  },
+  {
+    "sha": "41f03384bba898de966566bbddeaaddff441c4cb",
+    "subject": "plan: change: define routed registration and native reachability contracts",
+    "paths": [
+      "plan/pending/6lowpan-completion.md"
+    ],
+    "test_files": [],
+    "reviewer_documents": [],
+    "plan_files": [
+      "plan/pending/6lowpan-completion.md"
+    ],
+    "publication_commits": [
+      "C00",
+      "C41"
+    ],
+    "excluded": false,
+    "disposition": "Consolidate applicable contract in C00; preserve executed revision as historical provenance at C41."
+  },
+  {
+    "sha": "e2539d5173c21e2259b5b38e70f0896b006b5d5a",
+    "subject": "plan: change: separate registration authority from relay",
+    "paths": [
+      "plan/pending/6lowpan-completion.md"
+    ],
+    "test_files": [],
+    "reviewer_documents": [],
+    "plan_files": [
+      "plan/pending/6lowpan-completion.md"
+    ],
+    "publication_commits": [
+      "C00",
+      "C41"
+    ],
+    "excluded": false,
+    "disposition": "Consolidate applicable contract in C00; preserve executed revision as historical provenance at C41."
+  },
+  {
+    "sha": "9a39e5d1e486d4aa585569e57031e6205b6bf869",
+    "subject": "plan: change: separate malformed neighbor discovery receive repair",
+    "paths": [
+      "plan/pending/6lowpan-completion.md"
+    ],
+    "test_files": [],
+    "reviewer_documents": [],
+    "plan_files": [
+      "plan/pending/6lowpan-completion.md"
+    ],
+    "publication_commits": [
+      "C00",
+      "C41"
+    ],
+    "excluded": false,
+    "disposition": "Consolidate applicable contract in C00; preserve executed revision as historical provenance at C41."
+  },
+  {
+    "sha": "557b176bdb753f0af8ff0f56489de92766097e05",
+    "subject": "plan: change: define the complete neighbor option value contract",
+    "paths": [
+      "plan/pending/6lowpan-completion.md"
+    ],
+    "test_files": [],
+    "reviewer_documents": [],
+    "plan_files": [
+      "plan/pending/6lowpan-completion.md"
+    ],
+    "publication_commits": [
+      "C00",
+      "C41"
+    ],
+    "excluded": false,
+    "disposition": "Consolidate applicable contract in C00; preserve executed revision as historical provenance at C41."
+  },
+  {
+    "sha": "79f0762b95200b80e715ae218d9a3168476096ad",
+    "subject": "icmpv6: fix: retain every neighbor option byte value",
+    "paths": [
+      "doc/project/evidence/model/6lowpan/nd-option-values-verification.json",
+      "doc/whatsnew/compatible/icmpv6-nd-option-byte-values.txt",
+      "src/inet/networklayer/icmpv6/Ipv6NdMessage.msg",
+      "tests/protocol/6lowpan/nd-option-values.md",
+      "tests/unit/Ipv6NdRegistrationWire.test"
+    ],
+    "test_files": [
+      "tests/unit/Ipv6NdRegistrationWire.test"
+    ],
+    "reviewer_documents": [
+      "tests/protocol/6lowpan/nd-option-values.md"
+    ],
+    "plan_files": [],
+    "publication_commits": [
+      "C13"
+    ],
+    "excluded": false,
+    "disposition": "Fold enum representation, full-byte unit vectors and reviewer document into the registration wire contract before its consumers."
+  },
+  {
+    "sha": "71d8fb40914f40d8af96df621165cff0316b694c",
+    "subject": "lowpan: add: native neighbor solicitation responses",
+    "paths": [
+      "doc/project/evidence/model/6lowpan/completion.md",
+      "doc/project/evidence/model/6lowpan/p10-native-ns-verification.json",
+      "doc/whatsnew/compatible/lowpan-neighbor-solicitation.txt",
+      "src/inet/linklayer/lowpan/LowpanIpv6NeighbourDiscovery.cc",
+      "src/inet/linklayer/lowpan/LowpanIpv6NeighbourDiscovery.h",
+      "tests/protocol/6lowpan/LowpanNeighborRegistration.test",
+      "tests/protocol/6lowpan/neighbor-registration.md"
+    ],
+    "test_files": [
+      "tests/protocol/6lowpan/LowpanNeighborRegistration.test"
+    ],
+    "reviewer_documents": [
+      "tests/protocol/6lowpan/neighbor-registration.md"
+    ],
+    "plan_files": [],
+    "publication_commits": [
+      "C18"
+    ],
+    "excluded": false,
+    "disposition": "Port delta with its original test/document/registration obligations."
+  },
+  {
+    "sha": "bced36c7d35cdbcfcef0ae082a8e9691d555e125",
+    "subject": "lowpan: add: native router discovery and registration refresh",
+    "paths": [
+      "doc/project/evidence/model/6lowpan/completion.md",
+      "doc/project/evidence/model/6lowpan/p10-host-verification.json",
+      "doc/whatsnew/compatible/lowpan-host-registration.txt",
+      "src/inet/linklayer/lowpan/LowpanHostRegistration.cc",
+      "src/inet/linklayer/lowpan/LowpanHostRegistration.h",
+      "src/inet/linklayer/lowpan/LowpanIpv6.cc",
+      "src/inet/linklayer/lowpan/LowpanIpv6.h",
+      "src/inet/linklayer/lowpan/LowpanIpv6NeighbourDiscovery.cc",
+      "src/inet/linklayer/lowpan/LowpanIpv6NeighbourDiscovery.h",
+      "src/inet/linklayer/lowpan/LowpanIpv6NeighbourDiscovery.ned",
+      "src/inet/linklayer/lowpan/LowpanIpv6NetworkLayer.ned",
+      "src/inet/linklayer/lowpan/LowpanLayer.ned",
+      "tests/protocol/6lowpan/LowpanHostRegistration.test",
+      "tests/protocol/6lowpan/host-registration.md"
+    ],
+    "test_files": [
+      "tests/protocol/6lowpan/LowpanHostRegistration.test"
+    ],
+    "reviewer_documents": [
+      "tests/protocol/6lowpan/host-registration.md"
+    ],
+    "plan_files": [],
+    "publication_commits": [
+      "C22"
+    ],
+    "excluded": false,
+    "disposition": "Port delta with its original test/document/registration obligations."
+  },
+  {
+    "sha": "c9c1b596e2ec5db49a67b183f4b343e3d5c8a185",
+    "subject": "plan: change: define native border admission and relay timing stages",
+    "paths": [
+      "plan/pending/6lowpan-completion.md"
+    ],
+    "test_files": [],
+    "reviewer_documents": [],
+    "plan_files": [
+      "plan/pending/6lowpan-completion.md"
+    ],
+    "publication_commits": [
+      "C00",
+      "C41"
+    ],
+    "excluded": false,
+    "disposition": "Consolidate applicable contract in C00; preserve executed revision as historical provenance at C41."
+  },
+  {
+    "sha": "07b862cfd60d32eb1c0e1f63661eb7b5de33125c",
+    "subject": "lowpan: fix: reject malformed neighbor discovery before dispatch",
+    "paths": [
+      "doc/project/evidence/model/6lowpan/completion.md",
+      "doc/project/evidence/model/6lowpan/p10-nd-wire-validation-verification.json",
+      "doc/whatsnew/compatible/lowpan-nd-wire-validation.txt",
+      "src/inet/linklayer/lowpan/LowpanIpv6.cc",
+      "src/inet/linklayer/lowpan/LowpanIpv6.h",
+      "tests/protocol/6lowpan/LowpanNdWireValidation.test",
+      "tests/protocol/6lowpan/nd-wire-validation.md"
+    ],
+    "test_files": [
+      "tests/protocol/6lowpan/LowpanNdWireValidation.test"
+    ],
+    "reviewer_documents": [
+      "tests/protocol/6lowpan/nd-wire-validation.md"
+    ],
+    "plan_files": [],
+    "publication_commits": [
+      "C19"
+    ],
+    "excluded": false,
+    "disposition": "Port delta with its original test/document/registration obligations."
+  },
+  {
+    "sha": "112b8db04d18e6e14e49c9cc81ef40316b7df248",
+    "subject": "lowpan: add: routed registration authority",
+    "paths": [
+      "doc/project/evidence/model/6lowpan/completion.md",
+      "doc/project/evidence/model/6lowpan/p10-authority-verification.json",
+      "doc/whatsnew/compatible/lowpan-registration-authority.txt",
+      "src/inet/linklayer/lowpan/LowpanIpv6NeighbourDiscovery.cc",
+      "src/inet/linklayer/lowpan/LowpanIpv6NeighbourDiscovery.h",
+      "src/inet/linklayer/lowpan/LowpanIpv6NeighbourDiscovery.ned",
+      "src/inet/linklayer/lowpan/LowpanRegistrationAuthority.cc",
+      "src/inet/linklayer/lowpan/LowpanRegistrationAuthority.h",
+      "tests/protocol/6lowpan/LowpanRegistrationAuthority.test",
+      "tests/protocol/6lowpan/registration-authority.md"
+    ],
+    "test_files": [
+      "tests/protocol/6lowpan/LowpanRegistrationAuthority.test"
+    ],
+    "reviewer_documents": [
+      "tests/protocol/6lowpan/registration-authority.md"
+    ],
+    "plan_files": [],
+    "publication_commits": [
+      "C24"
+    ],
+    "excluded": false,
+    "disposition": "Port delta with its original test/document/registration obligations."
+  },
+  {
+    "sha": "d2565ce9f57fbfac2598bc8ca7b62a624a6ed185",
+    "subject": "lowpan: fix: enforce registrar target and lifetime validity",
+    "paths": [
+      "doc/project/evidence/model/6lowpan/completion.md",
+      "doc/project/evidence/model/6lowpan/p10-registrar-validity-verification.json",
+      "doc/whatsnew/compatible/lowpan-registrar-validity.txt",
+      "src/inet/linklayer/lowpan/LowpanIpv6NeighbourDiscovery.cc",
+      "tests/protocol/6lowpan/LowpanRegistrarValidity.test",
+      "tests/protocol/6lowpan/registrar-validity.md"
+    ],
+    "test_files": [
+      "tests/protocol/6lowpan/LowpanRegistrarValidity.test"
+    ],
+    "reviewer_documents": [
+      "tests/protocol/6lowpan/registrar-validity.md"
+    ],
+    "plan_files": [],
+    "publication_commits": [
+      "C20"
+    ],
+    "excluded": false,
+    "disposition": "Port delta with its original test/document/registration obligations."
+  },
+  {
+    "sha": "c1edb6492b2ccb03f8e3b29d60940ebeeb232f89",
+    "subject": "plan: change: pin independent border registration leases",
+    "paths": [
+      "plan/pending/6lowpan-completion.md"
+    ],
+    "test_files": [],
+    "reviewer_documents": [],
+    "plan_files": [
+      "plan/pending/6lowpan-completion.md"
+    ],
+    "publication_commits": [
+      "C00",
+      "C41"
+    ],
+    "excluded": false,
+    "disposition": "Consolidate applicable contract in C00; preserve executed revision as historical provenance at C41."
+  },
+  {
+    "sha": "05757cb06960a4b0c53559b75cb066207b875418",
+    "subject": "plan: change: separate routed lifetime range correction",
+    "paths": [
+      "plan/pending/6lowpan-completion.md"
+    ],
+    "test_files": [],
+    "reviewer_documents": [],
+    "plan_files": [
+      "plan/pending/6lowpan-completion.md"
+    ],
+    "publication_commits": [
+      "C00",
+      "C41"
+    ],
+    "excluded": false,
+    "disposition": "Consolidate applicable contract in C00; preserve executed revision as historical provenance at C41."
+  },
+  {
+    "sha": "d865f9f6bd0dc5a00dddbe957be451b5ab419b98",
+    "subject": "lowpan: fix: bound routed registration lifetimes",
+    "paths": [
+      "doc/project/evidence/model/6lowpan/completion.md",
+      "doc/project/evidence/model/6lowpan/p10-authority-validity-verification.json",
+      "doc/whatsnew/compatible/lowpan-authority-validity.txt",
+      "src/inet/linklayer/lowpan/LowpanRegistrationAuthority.cc",
+      "tests/protocol/6lowpan/LowpanAuthorityValidity.test",
+      "tests/protocol/6lowpan/authority-validity.md"
+    ],
+    "test_files": [
+      "tests/protocol/6lowpan/LowpanAuthorityValidity.test"
+    ],
+    "reviewer_documents": [
+      "tests/protocol/6lowpan/authority-validity.md"
+    ],
+    "plan_files": [],
+    "publication_commits": [
+      "C25"
+    ],
+    "excluded": false,
+    "disposition": "Port delta with its original test/document/registration obligations."
+  },
+  {
+    "sha": "250cbcb68d10309ccacc33bfe9dde81866890df5",
+    "subject": "lowpan: add: native border registration",
+    "paths": [
+      "doc/project/evidence/model/6lowpan/completion.md",
+      "doc/project/evidence/model/6lowpan/p10-border-router-verification.json",
+      "doc/whatsnew/compatible/lowpan-border-router-registration.txt",
+      "src/inet/linklayer/lowpan/LowpanIpv6NeighbourDiscovery.cc",
+      "src/inet/linklayer/lowpan/LowpanIpv6NeighbourDiscovery.ned",
+      "src/inet/linklayer/lowpan/LowpanRegistrationAuthority.cc",
+      "src/inet/linklayer/lowpan/LowpanRegistrationAuthority.h",
+      "tests/protocol/6lowpan/LowpanBorderRouterRegistration.test",
+      "tests/protocol/6lowpan/border-router-registration.md"
+    ],
+    "test_files": [
+      "tests/protocol/6lowpan/LowpanBorderRouterRegistration.test"
+    ],
+    "reviewer_documents": [
+      "tests/protocol/6lowpan/border-router-registration.md"
+    ],
+    "plan_files": [],
+    "publication_commits": [
+      "C26"
+    ],
+    "excluded": false,
+    "disposition": "Port delta with its original test/document/registration obligations."
+  },
+  {
+    "sha": "5af283783916f5232b609f9fc312dd7a3a4a3f88",
+    "subject": "plan: change: pin context advertisement ownership",
+    "paths": [
+      "plan/pending/6lowpan-completion.md"
+    ],
+    "test_files": [],
+    "reviewer_documents": [],
+    "plan_files": [
+      "plan/pending/6lowpan-completion.md"
+    ],
+    "publication_commits": [
+      "C00",
+      "C41"
+    ],
+    "excluded": false,
+    "disposition": "Consolidate applicable contract in C00; preserve executed revision as historical provenance at C41."
+  },
+  {
+    "sha": "53b126d2a9fbe7851a2da2dc4c4ddf312bf21c26",
+    "subject": "lowpan: fix: preserve registration response timing",
+    "paths": [
+      "doc/project/evidence/model/6lowpan/completion.md",
+      "doc/project/evidence/model/6lowpan/p10-host-retry-verification.json",
+      "doc/whatsnew/compatible/lowpan-host-retry-timing.txt",
+      "src/inet/linklayer/lowpan/LowpanHostRegistration.cc",
+      "src/inet/linklayer/lowpan/LowpanHostRegistration.h",
+      "src/inet/linklayer/lowpan/LowpanIpv6NeighbourDiscovery.ned",
+      "tests/protocol/6lowpan/LowpanHostRetryTiming.test",
+      "tests/protocol/6lowpan/host-retry-timing.md"
+    ],
+    "test_files": [
+      "tests/protocol/6lowpan/LowpanHostRetryTiming.test"
+    ],
+    "reviewer_documents": [
+      "tests/protocol/6lowpan/host-retry-timing.md"
+    ],
+    "plan_files": [],
+    "publication_commits": [
+      "C23"
+    ],
+    "excluded": false,
+    "disposition": "Port delta with its original test/document/registration obligations."
+  },
+  {
+    "sha": "94656cba6497647c8aa5b3d3c034decc39a1febe",
+    "subject": "plan: change: pin relay cancellation and source validity",
+    "paths": [
+      "plan/pending/6lowpan-completion.md"
+    ],
+    "test_files": [],
+    "reviewer_documents": [],
+    "plan_files": [
+      "plan/pending/6lowpan-completion.md"
+    ],
+    "publication_commits": [
+      "C00",
+      "C41"
+    ],
+    "excluded": false,
+    "disposition": "Consolidate applicable contract in C00; preserve executed revision as historical provenance at C41."
+  },
+  {
+    "sha": "a551050399537555e036117e12a2eb81362b1b1e",
+    "subject": "plan: change: pin context origin and discovery integration",
+    "paths": [
+      "plan/pending/6lowpan-completion.md"
+    ],
+    "test_files": [],
+    "reviewer_documents": [],
+    "plan_files": [
+      "plan/pending/6lowpan-completion.md"
+    ],
+    "publication_commits": [
+      "C00",
+      "C41"
+    ],
+    "excluded": false,
+    "disposition": "Consolidate applicable contract in C00; preserve executed revision as historical provenance at C41."
+  },
+  {
+    "sha": "936e4b9e7f439b4df1370c935137b8e5748897be",
+    "subject": "lowpan: add: routed registration relay",
+    "paths": [
+      "doc/project/evidence/model/6lowpan/completion.md",
+      "doc/project/evidence/model/6lowpan/p10-relay-verification.json",
+      "doc/whatsnew/compatible/lowpan-routed-registration-relay.txt",
+      "plan/pending/6lowpan-completion.md",
+      "src/inet/linklayer/lowpan/LowpanIpv6NeighbourDiscovery.cc",
+      "src/inet/linklayer/lowpan/LowpanIpv6NeighbourDiscovery.h",
+      "src/inet/linklayer/lowpan/LowpanIpv6NeighbourDiscovery.ned",
+      "src/inet/linklayer/lowpan/LowpanRegistrationRelay.cc",
+      "src/inet/linklayer/lowpan/LowpanRegistrationRelay.h",
+      "tests/protocol/6lowpan/LowpanMultihopRegistration.test",
+      "tests/protocol/6lowpan/multihop-registration.md"
+    ],
+    "test_files": [
+      "tests/protocol/6lowpan/LowpanMultihopRegistration.test"
+    ],
+    "reviewer_documents": [
+      "tests/protocol/6lowpan/multihop-registration.md"
+    ],
+    "plan_files": [
+      "plan/pending/6lowpan-completion.md"
+    ],
+    "publication_commits": [
+      "C27"
+    ],
+    "excluded": false,
+    "disposition": "Port delta with its original test/document/registration obligations."
+  },
+  {
+    "sha": "49a17720c8f75d1090c69f19b02f32cb8b34cded",
+    "subject": "plan: change: separate advertised information from host admission",
+    "paths": [
+      "plan/pending/6lowpan-completion.md"
+    ],
+    "test_files": [],
+    "reviewer_documents": [],
+    "plan_files": [
+      "plan/pending/6lowpan-completion.md"
+    ],
+    "publication_commits": [
+      "C00",
+      "C41"
+    ],
+    "excluded": false,
+    "disposition": "Consolidate applicable contract in C00; preserve executed revision as historical provenance at C41."
+  },
+  {
+    "sha": "d995bfefb8357a104068dd6ff02dd5e6ca64707d",
+    "subject": "lowpan: fix: keep discovery compression context independent",
+    "paths": [
+      "doc/project/evidence/model/6lowpan/completion.md",
+      "doc/project/evidence/model/6lowpan/p10-discovery-compression-verification.json",
+      "doc/whatsnew/compatible/lowpan-discovery-compression.txt",
+      "src/inet/linklayer/lowpan/LowpanLayer.cc",
+      "tests/protocol/6lowpan/LowpanDiscoveryCompression.test",
+      "tests/protocol/6lowpan/discovery-compression.md"
+    ],
+    "test_files": [
+      "tests/protocol/6lowpan/LowpanDiscoveryCompression.test"
+    ],
+    "reviewer_documents": [
+      "tests/protocol/6lowpan/discovery-compression.md"
+    ],
+    "plan_files": [],
+    "publication_commits": [
+      "C28"
+    ],
+    "excluded": false,
+    "disposition": "Port delta with its original test/document/registration obligations."
+  },
+  {
+    "sha": "795e10273d06f7d5ea070d1581c349e5c707da86",
+    "subject": "plan: change: bound authoritative version updates",
+    "paths": [
+      "plan/pending/6lowpan-completion.md"
+    ],
+    "test_files": [],
+    "reviewer_documents": [],
+    "plan_files": [
+      "plan/pending/6lowpan-completion.md"
+    ],
+    "publication_commits": [
+      "C00",
+      "C41"
+    ],
+    "excluded": false,
+    "disposition": "Consolidate applicable contract in C00; preserve executed revision as historical provenance at C41."
+  },
+  {
+    "sha": "15656097dec9f488a4184079b5400a49a30b2045",
+    "subject": "lowpan: add: authoritative context advertisement distribution",
+    "paths": [
+      "doc/project/evidence/model/6lowpan/completion.md",
+      "doc/project/evidence/model/6lowpan/p10-context-verification.json",
+      "doc/whatsnew/compatible/lowpan-context-advertisements.txt",
+      "plan/pending/6lowpan-completion.md",
+      "src/inet/linklayer/lowpan/LowpanContextAdvertisements.cc",
+      "src/inet/linklayer/lowpan/LowpanContextAdvertisements.h",
+      "src/inet/linklayer/lowpan/LowpanContextTable.cc",
+      "src/inet/linklayer/lowpan/LowpanContextTable.h",
+      "src/inet/linklayer/lowpan/LowpanHostRegistration.cc",
+      "src/inet/linklayer/lowpan/LowpanIphcCodec.cc",
+      "src/inet/linklayer/lowpan/LowpanIpv6NeighbourDiscovery.cc",
+      "src/inet/linklayer/lowpan/LowpanIpv6NeighbourDiscovery.h",
+      "src/inet/linklayer/lowpan/LowpanIpv6NeighbourDiscovery.ned",
+      "src/inet/linklayer/lowpan/LowpanLayer.cc",
+      "src/inet/linklayer/lowpan/LowpanLayer.h",
+      "tests/protocol/6lowpan/LowpanContextAdvertisements.test",
+      "tests/protocol/6lowpan/context-advertisements.md"
+    ],
+    "test_files": [
+      "tests/protocol/6lowpan/LowpanContextAdvertisements.test"
+    ],
+    "reviewer_documents": [
+      "tests/protocol/6lowpan/context-advertisements.md"
+    ],
+    "plan_files": [
+      "plan/pending/6lowpan-completion.md"
+    ],
+    "publication_commits": [
+      "C29"
+    ],
+    "excluded": false,
+    "disposition": "Port delta with its original test/document/registration obligations."
+  },
+  {
+    "sha": "704c909f8608e3e151d744a5e3ee3b3babe1e686",
+    "subject": "plan: change: pin extended registration state ownership",
+    "paths": [
+      "plan/pending/6lowpan-completion.md"
+    ],
+    "test_files": [],
+    "reviewer_documents": [],
+    "plan_files": [
+      "plan/pending/6lowpan-completion.md"
+    ],
+    "publication_commits": [
+      "C00",
+      "C41"
+    ],
+    "excluded": false,
+    "disposition": "Consolidate applicable contract in C00; preserve executed revision as historical provenance at C41."
+  },
+  {
+    "sha": "db23c7a00cb92e87a34790f885b3a4d63c76cff3",
+    "subject": "plan: change: preserve unknown-recency notification safety",
+    "paths": [
+      "plan/pending/6lowpan-completion.md"
+    ],
+    "test_files": [],
+    "reviewer_documents": [],
+    "plan_files": [
+      "plan/pending/6lowpan-completion.md"
+    ],
+    "publication_commits": [
+      "C00",
+      "C41"
+    ],
+    "excluded": false,
+    "disposition": "Consolidate applicable contract in C00; preserve executed revision as historical provenance at C41."
+  },
+  {
+    "sha": "071ece0758dddf8da501f1c0ccbf584dd0ec66b2",
+    "subject": "doc: change: reconcile the 6LoWPAN evidence overview",
+    "paths": [
+      "doc/project/evidence/model/6lowpan/coverage.md"
+    ],
+    "test_files": [],
+    "reviewer_documents": [],
+    "plan_files": [],
+    "publication_commits": [
+      "C29",
+      "C41"
+    ],
+    "excluded": false,
+    "disposition": "Context-stage overview and final reconciliation."
+  },
+  {
+    "sha": "7c0608549efa767335ba4ff9407d22a62bee4205",
+    "subject": "plan: change: define automatic extended host transactions",
+    "paths": [
+      "plan/pending/6lowpan-completion.md"
+    ],
+    "test_files": [],
+    "reviewer_documents": [],
+    "plan_files": [
+      "plan/pending/6lowpan-completion.md"
+    ],
+    "publication_commits": [
+      "C00",
+      "C41"
+    ],
+    "excluded": false,
+    "disposition": "Consolidate applicable contract in C00; preserve executed revision as historical provenance at C41."
+  },
+  {
+    "sha": "6a033e6264e5328743e3249a9b04fed2cf66555f",
+    "subject": "plan: change: bound mesh forwarding and broadcast state",
+    "paths": [
+      "plan/pending/6lowpan-completion.md"
+    ],
+    "test_files": [],
+    "reviewer_documents": [],
+    "plan_files": [
+      "plan/pending/6lowpan-completion.md"
+    ],
+    "publication_commits": [
+      "C00",
+      "C41"
+    ],
+    "excluded": false,
+    "disposition": "Consolidate applicable contract in C00; preserve executed revision as historical provenance at C41."
+  },
+  {
+    "sha": "424160301f2151d933d81f6984d6163e67dcdfda",
+    "subject": "plan: change: separate native completion before fragment forwarding",
+    "paths": [
+      "plan/pending/6lowpan-completion.md"
+    ],
+    "test_files": [],
+    "reviewer_documents": [],
+    "plan_files": [
+      "plan/pending/6lowpan-completion.md"
+    ],
+    "publication_commits": [
+      "C00",
+      "C41"
+    ],
+    "excluded": false,
+    "disposition": "Consolidate applicable contract in C00; preserve executed revision as historical provenance at C41."
+  },
+  {
+    "sha": "4c573e0ffc8db555b7e4ca5b548a0b473329aba4",
+    "subject": "lowpan: add: extended address registration",
+    "paths": [
+      "doc/project/evidence/model/6lowpan/completion.md",
+      "doc/project/evidence/model/6lowpan/p11-registrars-verification.json",
+      "doc/whatsnew/compatible/lowpan-extended-registration.txt",
+      "plan/pending/6lowpan-completion.md",
+      "src/inet/linklayer/lowpan/LowpanContextAdvertisements.cc",
+      "src/inet/linklayer/lowpan/LowpanContextAdvertisements.h",
+      "src/inet/linklayer/lowpan/LowpanHostRegistration.cc",
+      "src/inet/linklayer/lowpan/LowpanIpv6NeighbourDiscovery.cc",
+      "src/inet/linklayer/lowpan/LowpanIpv6NeighbourDiscovery.h",
+      "src/inet/linklayer/lowpan/LowpanIpv6NeighbourDiscovery.ned",
+      "src/inet/linklayer/lowpan/LowpanRegistrationAuthority.cc",
+      "src/inet/linklayer/lowpan/LowpanRegistrationAuthority.h",
+      "src/inet/linklayer/lowpan/LowpanRegistrationInfo.cc",
+      "src/inet/linklayer/lowpan/LowpanRegistrationInfo.h",
+      "src/inet/linklayer/lowpan/LowpanRegistrationRelay.cc",
+      "src/inet/linklayer/lowpan/LowpanRegistrationRelay.h",
+      "tests/protocol/6lowpan/LowpanExtendedRegistration.test",
+      "tests/protocol/6lowpan/LowpanExtendedRegistrationRaces.test",
+      "tests/protocol/6lowpan/extended-registration-races.md",
+      "tests/protocol/6lowpan/extended-registration.md",
+      "tests/unit/LowpanRegistrationInfo.test"
+    ],
+    "test_files": [
+      "tests/protocol/6lowpan/LowpanExtendedRegistration.test",
+      "tests/protocol/6lowpan/LowpanExtendedRegistrationRaces.test",
+      "tests/unit/LowpanRegistrationInfo.test"
+    ],
+    "reviewer_documents": [
+      "tests/protocol/6lowpan/extended-registration-races.md",
+      "tests/protocol/6lowpan/extended-registration.md"
+    ],
+    "plan_files": [
+      "plan/pending/6lowpan-completion.md"
+    ],
+    "publication_commits": [
+      "C30"
+    ],
+    "excluded": false,
+    "disposition": "Port delta with its original test/document/registration obligations."
+  },
+  {
+    "sha": "d2d9b69921df8add1b634bd1393ec45e7bb8ce06",
+    "subject": "plan: change: pin extended host retirement and cooldowns",
+    "paths": [
+      "plan/pending/6lowpan-completion.md"
+    ],
+    "test_files": [],
+    "reviewer_documents": [],
+    "plan_files": [
+      "plan/pending/6lowpan-completion.md"
+    ],
+    "publication_commits": [
+      "C00",
+      "C41"
+    ],
+    "excluded": false,
+    "disposition": "Consolidate applicable contract in C00; preserve executed revision as historical provenance at C41."
+  },
+  {
+    "sha": "d7011506fe1f6b83d91cf6c6672fbb146624c0bd",
+    "subject": "plan: change: split independent extended host lifecycle coverage",
+    "paths": [
+      "plan/pending/6lowpan-completion.md"
+    ],
+    "test_files": [],
+    "reviewer_documents": [],
+    "plan_files": [
+      "plan/pending/6lowpan-completion.md"
+    ],
+    "publication_commits": [
+      "C00",
+      "C41"
+    ],
+    "excluded": false,
+    "disposition": "Consolidate applicable contract in C00; preserve executed revision as historical provenance at C41."
+  },
+  {
+    "sha": "794bcde2b12966c2250c82f9a8fd489c8abd0abf",
+    "subject": "plan: change: separate unsolicited Moved sender correction",
+    "paths": [
+      "plan/pending/6lowpan-completion.md"
+    ],
+    "test_files": [],
+    "reviewer_documents": [],
+    "plan_files": [
+      "plan/pending/6lowpan-completion.md"
+    ],
+    "publication_commits": [
+      "C00",
+      "C41"
+    ],
+    "excluded": false,
+    "disposition": "Consolidate applicable contract in C00; preserve executed revision as historical provenance at C41."
+  },
+  {
+    "sha": "e02031da9e7c656e68909cfc2704f3766a8898af",
+    "subject": "plan: change: verify common native source validation before hosts",
+    "paths": [
+      "plan/pending/6lowpan-completion.md"
+    ],
+    "test_files": [],
+    "reviewer_documents": [],
+    "plan_files": [
+      "plan/pending/6lowpan-completion.md"
+    ],
+    "publication_commits": [
+      "C00",
+      "C41"
+    ],
+    "excluded": false,
+    "disposition": "Consolidate applicable contract in C00; preserve executed revision as historical provenance at C41."
+  },
+  {
+    "sha": "9810acc14212faee2479d52775b358ee9c996ac0",
+    "subject": "lowpan: fix: mark asynchronous Moved advertisements unsolicited",
+    "paths": [
+      "doc/project/evidence/model/6lowpan/completion.md",
+      "doc/project/evidence/model/6lowpan/p11-moved-flags-verification.json",
+      "doc/whatsnew/compatible/lowpan-unsolicited-moved.txt",
+      "src/inet/linklayer/lowpan/LowpanIpv6NeighbourDiscovery.cc",
+      "src/inet/linklayer/lowpan/LowpanIpv6NeighbourDiscovery.h",
+      "tests/protocol/6lowpan/LowpanExtendedRegistration.test",
+      "tests/protocol/6lowpan/extended-registration.md"
+    ],
+    "test_files": [
+      "tests/protocol/6lowpan/LowpanExtendedRegistration.test"
+    ],
+    "reviewer_documents": [
+      "tests/protocol/6lowpan/extended-registration.md"
+    ],
+    "plan_files": [],
+    "publication_commits": [
+      "C31"
+    ],
+    "excluded": false,
+    "disposition": "Port delta with its original test/document/registration obligations."
+  },
+  {
+    "sha": "4663b7ca3daea8bff4be18aa6b4380586d0886ef",
+    "subject": "lowpan: fix: validate native sources before every egress",
+    "paths": [
+      "doc/project/evidence/model/6lowpan/completion.md",
+      "doc/project/evidence/model/6lowpan/p11-source-validity-verification.json",
+      "doc/whatsnew/compatible/lowpan-native-source-validation.txt",
+      "src/inet/linklayer/lowpan/LowpanIpv6.cc",
+      "tests/protocol/6lowpan/LowpanPinnedSourceValidity.test",
+      "tests/protocol/6lowpan/pinned-source-validity.md"
+    ],
+    "test_files": [
+      "tests/protocol/6lowpan/LowpanPinnedSourceValidity.test"
+    ],
+    "reviewer_documents": [
+      "tests/protocol/6lowpan/pinned-source-validity.md"
+    ],
+    "plan_files": [],
+    "publication_commits": [
+      "C32"
+    ],
+    "excluded": false,
+    "disposition": "Port delta with its original test/document/registration obligations."
+  },
+  {
+    "sha": "389090ca3ef5c1057cc370d23e13b959f0574ba8",
+    "subject": "lowpan: add: extended host registration transactions",
+    "paths": [
+      "doc/project/evidence/model/6lowpan/completion.md",
+      "doc/project/evidence/model/6lowpan/p11-host-verification.json",
+      "doc/whatsnew/compatible/lowpan-extended-host-registration.txt",
+      "plan/pending/6lowpan-completion.md",
+      "src/inet/linklayer/lowpan/LowpanHostRegistration.cc",
+      "src/inet/linklayer/lowpan/LowpanHostRegistration.h",
+      "src/inet/linklayer/lowpan/LowpanIpv6NeighbourDiscovery.cc",
+      "src/inet/linklayer/lowpan/LowpanIpv6NeighbourDiscovery.h",
+      "src/inet/linklayer/lowpan/LowpanIpv6NeighbourDiscovery.ned",
+      "tests/protocol/6lowpan/LowpanExtendedHostLifecycle.test",
+      "tests/protocol/6lowpan/LowpanExtendedHostRegistration.test",
+      "tests/protocol/6lowpan/extended-host-lifecycle.md",
+      "tests/protocol/6lowpan/extended-host-registration.md",
+      "tests/protocol/6lowpan/extended-registration.md"
+    ],
+    "test_files": [
+      "tests/protocol/6lowpan/LowpanExtendedHostLifecycle.test",
+      "tests/protocol/6lowpan/LowpanExtendedHostRegistration.test"
+    ],
+    "reviewer_documents": [
+      "tests/protocol/6lowpan/extended-host-lifecycle.md",
+      "tests/protocol/6lowpan/extended-host-registration.md",
+      "tests/protocol/6lowpan/extended-registration.md"
+    ],
+    "plan_files": [
+      "plan/pending/6lowpan-completion.md"
+    ],
+    "publication_commits": [
+      "C33"
+    ],
+    "excluded": false,
+    "disposition": "Port delta with its original test/document/registration obligations."
+  },
+  {
+    "sha": "1256a061f734f674656a3690abfae5b68cf34f60",
+    "subject": "plan: change: pin native mesh profile and tag lifetime",
+    "paths": [
+      "plan/pending/6lowpan-completion.md"
+    ],
+    "test_files": [],
+    "reviewer_documents": [],
+    "plan_files": [
+      "plan/pending/6lowpan-completion.md"
+    ],
+    "publication_commits": [
+      "C00",
+      "C41"
+    ],
+    "excluded": false,
+    "disposition": "Consolidate applicable contract in C00; preserve executed revision as historical provenance at C41."
+  },
+  {
+    "sha": "df749e1c4c861b0d23dea872d3966f9d4b0542aa",
+    "subject": "plan: change: bound broadcast fragment reuse and suppression",
+    "paths": [
+      "plan/pending/6lowpan-completion.md"
+    ],
+    "test_files": [],
+    "reviewer_documents": [],
+    "plan_files": [
+      "plan/pending/6lowpan-completion.md"
+    ],
+    "publication_commits": [
+      "C00",
+      "C41"
+    ],
+    "excluded": false,
+    "disposition": "Consolidate applicable contract in C00; preserve executed revision as historical provenance at C41."
+  },
+  {
+    "sha": "d28e10f460802508ae196724f94f0069a01080d7",
+    "subject": "plan: change: include mesh packet introspection",
+    "paths": [
+      "plan/pending/6lowpan-completion.md"
+    ],
+    "test_files": [],
+    "reviewer_documents": [],
+    "plan_files": [
+      "plan/pending/6lowpan-completion.md"
+    ],
+    "publication_commits": [
+      "C00",
+      "C41"
+    ],
+    "excluded": false,
+    "disposition": "Consolidate applicable contract in C00; preserve executed revision as historical provenance at C41."
+  },
+  {
+    "sha": "da3900d6c80c0119a728fb08341ea41852b8cb88",
+    "subject": "plan: change: align mesh reservations with clock quantization",
+    "paths": [
+      "plan/pending/6lowpan-completion.md"
+    ],
+    "test_files": [],
+    "reviewer_documents": [],
+    "plan_files": [
+      "plan/pending/6lowpan-completion.md"
+    ],
+    "publication_commits": [
+      "C00",
+      "C41"
+    ],
+    "excluded": false,
+    "disposition": "Consolidate applicable contract in C00; preserve executed revision as historical provenance at C41."
+  },
+  {
+    "sha": "c1ecdf38d6979b3117f84645949f5b4047ed8909",
+    "subject": "lowpan: add: mesh-under forwarding",
+    "paths": [
+      "doc/project/evidence/model/6lowpan/completion.md",
+      "doc/project/evidence/model/6lowpan/p12-mesh-verification.json",
+      "doc/whatsnew/compatible/lowpan-mesh-forwarding.txt",
+      "plan/pending/6lowpan-completion.md",
+      "src/inet/linklayer/lowpan/LowpanBroadcastHeader.msg",
+      "src/inet/linklayer/lowpan/LowpanBroadcastHeaderSerializer.cc",
+      "src/inet/linklayer/lowpan/LowpanBroadcastHeaderSerializer.h",
+      "src/inet/linklayer/lowpan/LowpanLayer.cc",
+      "src/inet/linklayer/lowpan/LowpanLayer.h",
+      "src/inet/linklayer/lowpan/LowpanLayer.ned",
+      "src/inet/linklayer/lowpan/LowpanMeshHeader.msg",
+      "src/inet/linklayer/lowpan/LowpanMeshHeaderSerializer.cc",
+      "src/inet/linklayer/lowpan/LowpanMeshHeaderSerializer.h",
+      "src/inet/linklayer/lowpan/LowpanPacketDropDetails.msg",
+      "src/inet/linklayer/lowpan/LowpanProtocolDissector.cc",
+      "src/inet/linklayer/lowpan/LowpanProtocolPrinter.cc",
+      "tests/protocol/6lowpan/LowpanMeshForwarding.test",
+      "tests/protocol/6lowpan/mesh-forwarding.md",
+      "tests/unit/LowpanMeshWire.test"
+    ],
+    "test_files": [
+      "tests/protocol/6lowpan/LowpanMeshForwarding.test",
+      "tests/unit/LowpanMeshWire.test"
+    ],
+    "reviewer_documents": [
+      "tests/protocol/6lowpan/mesh-forwarding.md"
+    ],
+    "plan_files": [
+      "plan/pending/6lowpan-completion.md"
+    ],
+    "publication_commits": [
+      "C34"
+    ],
+    "excluded": false,
+    "disposition": "Port delta with its original test/document/registration obligations."
+  },
+  {
+    "sha": "ad2f88d50db542c4e056c7075cbb2499f83925b8",
+    "subject": "lowpan: add: paging and extended dispatch",
+    "paths": [
+      "doc/project/evidence/model/6lowpan/completion.md",
+      "doc/project/evidence/model/6lowpan/p13-paging-verification.json",
+      "doc/whatsnew/compatible/lowpan-paging-dispatch.txt",
+      "plan/pending/6lowpan-completion.md",
+      "src/inet/linklayer/lowpan/LowpanDispatchPrefix.cc",
+      "src/inet/linklayer/lowpan/LowpanDispatchPrefix.h",
+      "src/inet/linklayer/lowpan/LowpanExtendedDispatchHeader.msg",
+      "src/inet/linklayer/lowpan/LowpanExtendedDispatchHeaderSerializer.cc",
+      "src/inet/linklayer/lowpan/LowpanExtendedDispatchHeaderSerializer.h",
+      "src/inet/linklayer/lowpan/LowpanLayer.cc",
+      "src/inet/linklayer/lowpan/LowpanLayer.h",
+      "src/inet/linklayer/lowpan/LowpanPacketDropDetails.msg",
+      "src/inet/linklayer/lowpan/LowpanPageHeader.msg",
+      "src/inet/linklayer/lowpan/LowpanPageHeaderSerializer.cc",
+      "src/inet/linklayer/lowpan/LowpanPageHeaderSerializer.h",
+      "src/inet/linklayer/lowpan/LowpanProtocolDissector.cc",
+      "src/inet/linklayer/lowpan/LowpanProtocolPrinter.cc",
+      "tests/protocol/6lowpan/LowpanPagingDispatch.test",
+      "tests/protocol/6lowpan/paging-dispatch.md",
+      "tests/unit/LowpanPagingWire.test"
+    ],
+    "test_files": [
+      "tests/protocol/6lowpan/LowpanPagingDispatch.test",
+      "tests/unit/LowpanPagingWire.test"
+    ],
+    "reviewer_documents": [
+      "tests/protocol/6lowpan/paging-dispatch.md"
+    ],
+    "plan_files": [
+      "plan/pending/6lowpan-completion.md"
+    ],
+    "publication_commits": [
+      "C35"
+    ],
+    "excluded": false,
+    "disposition": "Port delta with its original test/document/registration obligations."
+  },
+  {
+    "sha": "7cb0dc3c52c929fc74b6ca0b430ea4dcdcdcd756",
+    "subject": "plan: change: pin native completion drain eligibility",
+    "paths": [
+      "plan/pending/6lowpan-completion.md"
+    ],
+    "test_files": [],
+    "reviewer_documents": [],
+    "plan_files": [
+      "plan/pending/6lowpan-completion.md"
+    ],
+    "publication_commits": [
+      "C00",
+      "C41"
+    ],
+    "excluded": false,
+    "disposition": "Consolidate applicable contract in C00; preserve executed revision as historical provenance at C41."
+  },
+  {
+    "sha": "ad7b719290aa20ed7a4676dcee109d3f442e2cdf",
+    "subject": "plan: change: account for complete recovery header expansion",
+    "paths": [
+      "plan/pending/6lowpan-completion.md"
+    ],
+    "test_files": [],
+    "reviewer_documents": [],
+    "plan_files": [
+      "plan/pending/6lowpan-completion.md"
+    ],
+    "publication_commits": [
+      "C00",
+      "C41"
+    ],
+    "excluded": false,
+    "disposition": "Consolidate applicable contract in C00; preserve executed revision as historical provenance at C41."
+  },
+  {
+    "sha": "0083d05d910b1f3a50013dc1c3552959b3a0ee5e",
+    "subject": "plan: change: preserve standalone native MAC composition",
+    "paths": [
+      "plan/pending/6lowpan-completion.md"
+    ],
+    "test_files": [],
+    "reviewer_documents": [],
+    "plan_files": [
+      "plan/pending/6lowpan-completion.md"
+    ],
+    "publication_commits": [
+      "C00",
+      "C41"
+    ],
+    "excluded": false,
+    "disposition": "Consolidate applicable contract in C00; preserve executed revision as historical provenance at C41."
+  },
+  {
+    "sha": "f09c571a4a5a39f1d4b636a92f2df11a46af8782",
+    "subject": "lowpan: add: native transmission completion callbacks",
+    "paths": [
+      "doc/project/evidence/model/6lowpan/completion.md",
+      "doc/project/evidence/model/6lowpan/p14-native-completion-verification.json",
+      "doc/whatsnew/compatible/lowpan-native-completion.txt",
+      "src/inet/linklayer/lowpan/LowpanBoundaryBase.cc",
+      "src/inet/linklayer/lowpan/LowpanBoundaryBase.h",
+      "src/inet/linklayer/lowpan/LowpanLayer.cc",
+      "src/inet/linklayer/lowpan/LowpanLayer.h",
+      "src/inet/linklayer/lowpan/LowpanLayer.ned",
+      "src/inet/linklayer/lowpan/LowpanNativeBoundary.cc",
+      "src/inet/linklayer/lowpan/LowpanNativeBoundary.h",
+      "src/inet/linklayer/lowpan/LowpanNativeMac.cc",
+      "src/inet/linklayer/lowpan/LowpanNativeMac.h",
+      "tests/module/LowpanNativeTransmissionCompletion.test"
+    ],
+    "test_files": [
+      "tests/module/LowpanNativeTransmissionCompletion.test"
+    ],
+    "reviewer_documents": [],
+    "plan_files": [],
+    "publication_commits": [
+      "C36"
+    ],
+    "excluded": false,
+    "disposition": "Port delta with its original test/document/registration obligations."
+  },
+  {
+    "sha": "6f74aaff7473bc2b297c196566327cc2a6218ba8",
+    "subject": "plan: change: split bounded paced source fragmentation",
+    "paths": [
+      "plan/pending/6lowpan-completion.md"
+    ],
+    "test_files": [],
+    "reviewer_documents": [],
+    "plan_files": [
+      "plan/pending/6lowpan-completion.md"
+    ],
+    "publication_commits": [
+      "C00",
+      "C41"
+    ],
+    "excluded": false,
+    "disposition": "Consolidate applicable contract in C00; preserve executed revision as historical provenance at C41."
+  },
+  {
+    "sha": "61d2a1642666291567b39a2986ff13d64e8a68ca",
+    "subject": "lowpan: add: paced native source fragmentation",
+    "paths": [
+      "doc/project/evidence/model/6lowpan/completion.md",
+      "doc/project/evidence/model/6lowpan/p14-paced-source-verification.json",
+      "doc/whatsnew/compatible/lowpan-paced-source.txt",
+      "src/inet/linklayer/lowpan/LowpanLayer.cc",
+      "src/inet/linklayer/lowpan/LowpanLayer.h",
+      "src/inet/linklayer/lowpan/LowpanLayer.ned",
+      "src/inet/linklayer/lowpan/LowpanPacketDropDetails.msg",
+      "src/inet/linklayer/lowpan/LowpanSourceFragmentation.cc",
+      "src/inet/linklayer/lowpan/LowpanSourceFragmentation.h",
+      "tests/protocol/6lowpan/LowpanPacedFragmentation.test",
+      "tests/protocol/6lowpan/paced-fragmentation.md"
+    ],
+    "test_files": [
+      "tests/protocol/6lowpan/LowpanPacedFragmentation.test"
+    ],
+    "reviewer_documents": [
+      "tests/protocol/6lowpan/paced-fragmentation.md"
+    ],
+    "plan_files": [],
+    "publication_commits": [
+      "C37"
+    ],
+    "excluded": false,
+    "disposition": "Port delta with its original test/document/registration obligations."
+  },
+  {
+    "sha": "bffa10f8f8e4595471a626a6e8f6e3365a52b2d6",
+    "subject": "plan: change: pin native fragment forwarding policy",
+    "paths": [
+      "plan/pending/6lowpan-completion.md"
+    ],
+    "test_files": [],
+    "reviewer_documents": [],
+    "plan_files": [
+      "plan/pending/6lowpan-completion.md"
+    ],
+    "publication_commits": [
+      "C00",
+      "C41"
+    ],
+    "excluded": false,
+    "disposition": "Consolidate applicable contract in C00; preserve executed revision as historical provenance at C41."
+  },
+  {
+    "sha": "99729354e9b20d0f9ca351d3b8b6a886c9f4ad72",
+    "subject": "plan: change: preserve IPv6 policy hooks during fragment forwarding",
+    "paths": [
+      "plan/pending/6lowpan-completion.md"
+    ],
+    "test_files": [],
+    "reviewer_documents": [],
+    "plan_files": [
+      "plan/pending/6lowpan-completion.md"
+    ],
+    "publication_commits": [
+      "C00",
+      "C41"
+    ],
+    "excluded": false,
+    "disposition": "Consolidate applicable contract in C00; preserve executed revision as historical provenance at C41."
+  },
+  {
+    "sha": "8584a3238fe90161f74895cf76e47f6470729922",
+    "subject": "plan: change: bound recoverable fragment header growth",
+    "paths": [
+      "plan/pending/6lowpan-completion.md"
+    ],
+    "test_files": [],
+    "reviewer_documents": [],
+    "plan_files": [
+      "plan/pending/6lowpan-completion.md"
+    ],
+    "publication_commits": [
+      "C00",
+      "C41"
+    ],
+    "excluded": false,
+    "disposition": "Consolidate applicable contract in C00; preserve executed revision as historical provenance at C41."
+  },
+  {
+    "sha": "37b45033019ad48bd08e5ef37d6800fef5637c18",
+    "subject": "plan: change: pin bounded fragment recovery scheduling",
+    "paths": [
+      "plan/pending/6lowpan-completion.md"
+    ],
+    "test_files": [],
+    "reviewer_documents": [],
+    "plan_files": [
+      "plan/pending/6lowpan-completion.md"
+    ],
+    "publication_commits": [
+      "C00",
+      "C41"
+    ],
+    "excluded": false,
+    "disposition": "Consolidate applicable contract in C00; preserve executed revision as historical provenance at C41."
+  },
+  {
+    "sha": "2f53450e0dcc8925cca43c961d7089cd24b0b84b",
+    "subject": "plan: change: honor ordinary egress contracts in fragment forwarding",
+    "paths": [
+      "plan/pending/6lowpan-completion.md"
+    ],
+    "test_files": [],
+    "reviewer_documents": [],
+    "plan_files": [
+      "plan/pending/6lowpan-completion.md"
+    ],
+    "publication_commits": [
+      "C00",
+      "C41"
+    ],
+    "excluded": false,
+    "disposition": "Consolidate applicable contract in C00; preserve executed revision as historical provenance at C41."
+  },
+  {
+    "sha": "9ef6eb6438653afdcb49108cd9280ad08969234c",
+    "subject": "plan: change: schedule internal constant naming cleanup",
+    "paths": [
+      "plan/pending/6lowpan-completion.md"
+    ],
+    "test_files": [],
+    "reviewer_documents": [],
+    "plan_files": [
+      "plan/pending/6lowpan-completion.md"
+    ],
+    "publication_commits": [
+      "C00",
+      "C41"
+    ],
+    "excluded": false,
+    "disposition": "Consolidate applicable contract in C00; preserve executed revision as historical provenance at C41."
+  },
+  {
+    "sha": "063659d6948ebf4cec932579f564298d7026bb00",
+    "subject": "lowpan: add: virtual fragment forwarding",
+    "paths": [
+      "doc/project/evidence/model/6lowpan/completion.md",
+      "doc/project/evidence/model/6lowpan/p14-vrb-verification.json",
+      "doc/whatsnew/compatible/lowpan-fragment-forwarding.txt",
+      "plan/pending/6lowpan-completion.md",
+      "src/inet/linklayer/lowpan/LowpanDatagramTagAllocator.cc",
+      "src/inet/linklayer/lowpan/LowpanDatagramTagAllocator.h",
+      "src/inet/linklayer/lowpan/LowpanFragmentForwarding.cc",
+      "src/inet/linklayer/lowpan/LowpanFragmentForwarding.h",
+      "src/inet/linklayer/lowpan/LowpanIpv6.cc",
+      "src/inet/linklayer/lowpan/LowpanIpv6.h",
+      "src/inet/linklayer/lowpan/LowpanLayer.cc",
+      "src/inet/linklayer/lowpan/LowpanLayer.h",
+      "src/inet/linklayer/lowpan/LowpanLayer.ned",
+      "src/inet/linklayer/lowpan/LowpanPacketDropDetails.msg",
+      "src/inet/linklayer/lowpan/LowpanReassemblyTable.cc",
+      "src/inet/linklayer/lowpan/LowpanReassemblyTable.h",
+      "src/inet/linklayer/lowpan/LowpanSourceFragmentation.cc",
+      "src/inet/linklayer/lowpan/LowpanSourceFragmentation.h",
+      "tests/protocol/6lowpan/LowpanFragmentForwarding.test",
+      "tests/protocol/6lowpan/LowpanFragmentForwardingLifecycle.test",
+      "tests/protocol/6lowpan/fragment-forwarding-lifecycle.md",
+      "tests/protocol/6lowpan/fragment-forwarding.md",
+      "tests/unit/LowpanDatagramTags.test",
+      "tests/unit/LowpanReassembly.test"
+    ],
+    "test_files": [
+      "tests/protocol/6lowpan/LowpanFragmentForwarding.test",
+      "tests/protocol/6lowpan/LowpanFragmentForwardingLifecycle.test",
+      "tests/unit/LowpanDatagramTags.test",
+      "tests/unit/LowpanReassembly.test"
+    ],
+    "reviewer_documents": [
+      "tests/protocol/6lowpan/fragment-forwarding-lifecycle.md",
+      "tests/protocol/6lowpan/fragment-forwarding.md"
+    ],
+    "plan_files": [
+      "plan/pending/6lowpan-completion.md"
+    ],
+    "publication_commits": [
+      "C38"
+    ],
+    "excluded": false,
+    "disposition": "Port delta with its original test/document/registration obligations."
+  },
+  {
+    "sha": "10b553ffcdd5f1ce0d10d9533a14980e92eba9e1",
+    "subject": "plan: change: bound recovery source fragment partitions",
+    "paths": [
+      "plan/pending/6lowpan-completion.md"
+    ],
+    "test_files": [],
+    "reviewer_documents": [],
+    "plan_files": [
+      "plan/pending/6lowpan-completion.md"
+    ],
+    "publication_commits": [
+      "C00",
+      "C41"
+    ],
+    "excluded": false,
+    "disposition": "Consolidate applicable contract in C00; preserve executed revision as historical provenance at C41."
+  },
+  {
+    "sha": "4e1c33220535a4fe82e68ac7de5e7772d3fe91a6",
+    "subject": "plan: change: pin recovery ownership and reset policy",
+    "paths": [
+      "plan/pending/6lowpan-completion.md"
+    ],
+    "test_files": [],
+    "reviewer_documents": [],
+    "plan_files": [
+      "plan/pending/6lowpan-completion.md"
+    ],
+    "publication_commits": [
+      "C00",
+      "C41"
+    ],
+    "excluded": false,
+    "disposition": "Consolidate applicable contract in C00; preserve executed revision as historical provenance at C41."
+  },
+  {
+    "sha": "461b5d4065ce76ac551fc836307ddef1ae4ccb56",
+    "subject": "plan: change: name recovery lifecycle and composition checks",
+    "paths": [
+      "plan/pending/6lowpan-completion.md"
+    ],
+    "test_files": [],
+    "reviewer_documents": [],
+    "plan_files": [
+      "plan/pending/6lowpan-completion.md"
+    ],
+    "publication_commits": [
+      "C00",
+      "C41"
+    ],
+    "excluded": false,
+    "disposition": "Consolidate applicable contract in C00; preserve executed revision as historical provenance at C41."
+  },
+  {
+    "sha": "9f9e5f59fff564de5c12b496e2a0fcd00f6d5796",
+    "subject": "plan: change: honor IPv6 MTU in fragment forwarding",
+    "paths": [
+      "plan/pending/6lowpan-completion.md"
+    ],
+    "test_files": [],
+    "reviewer_documents": [],
+    "plan_files": [
+      "plan/pending/6lowpan-completion.md"
+    ],
+    "publication_commits": [
+      "C00",
+      "C41"
+    ],
+    "excluded": false,
+    "disposition": "Consolidate applicable contract in C00; preserve executed revision as historical provenance at C41."
+  },
+  {
+    "sha": "66192266b89826c497928e81f9daa178fa3275ff",
+    "subject": "lowpan: add: selective fragment recovery",
+    "paths": [
+      "doc/project/evidence/model/6lowpan/completion.md",
+      "doc/project/evidence/model/6lowpan/p15-selective-recovery-verification.json",
+      "doc/whatsnew/compatible/lowpan-selective-recovery.txt",
+      "plan/pending/6lowpan-completion.md",
+      "src/inet/linklayer/lowpan/LowpanDispatchPrefix.cc",
+      "src/inet/linklayer/lowpan/LowpanDispatchPrefix.h",
+      "src/inet/linklayer/lowpan/LowpanLayer.cc",
+      "src/inet/linklayer/lowpan/LowpanLayer.h",
+      "src/inet/linklayer/lowpan/LowpanLayer.ned",
+      "src/inet/linklayer/lowpan/LowpanPacketDropDetails.msg",
+      "src/inet/linklayer/lowpan/LowpanProtocolDissector.cc",
+      "src/inet/linklayer/lowpan/LowpanProtocolPrinter.cc",
+      "src/inet/linklayer/lowpan/LowpanRecoverySource.cc",
+      "src/inet/linklayer/lowpan/LowpanRecoverySource.h",
+      "src/inet/linklayer/lowpan/LowpanRecoveryTagAllocator.cc",
+      "src/inet/linklayer/lowpan/LowpanRecoveryTagAllocator.h",
+      "src/inet/linklayer/lowpan/LowpanRfragAckHeader.msg",
+      "src/inet/linklayer/lowpan/LowpanRfragAckHeaderSerializer.cc",
+      "src/inet/linklayer/lowpan/LowpanRfragAckHeaderSerializer.h",
+      "src/inet/linklayer/lowpan/LowpanRfragHeader.msg",
+      "src/inet/linklayer/lowpan/LowpanRfragHeaderSerializer.cc",
+      "src/inet/linklayer/lowpan/LowpanRfragHeaderSerializer.h",
+      "src/inet/linklayer/lowpan/LowpanSelectiveRecovery.cc",
+      "src/inet/linklayer/lowpan/LowpanSelectiveRecovery.h",
+      "tests/protocol/6lowpan/LowpanSelectiveRecovery.test",
+      "tests/protocol/6lowpan/LowpanSelectiveRecoveryLifecycle.test",
+      "tests/protocol/6lowpan/LowpanSelectiveRecoveryNoUdp.test",
+      "tests/protocol/6lowpan/selective-recovery-lifecycle.md",
+      "tests/protocol/6lowpan/selective-recovery-no-udp.md",
+      "tests/protocol/6lowpan/selective-recovery.md",
+      "tests/unit/LowpanRecoveryPartition.test",
+      "tests/unit/LowpanRecoveryTags.test",
+      "tests/unit/LowpanRecoveryWire.test"
+    ],
+    "test_files": [
+      "tests/protocol/6lowpan/LowpanSelectiveRecovery.test",
+      "tests/protocol/6lowpan/LowpanSelectiveRecoveryLifecycle.test",
+      "tests/protocol/6lowpan/LowpanSelectiveRecoveryNoUdp.test",
+      "tests/unit/LowpanRecoveryPartition.test",
+      "tests/unit/LowpanRecoveryTags.test",
+      "tests/unit/LowpanRecoveryWire.test"
+    ],
+    "reviewer_documents": [
+      "tests/protocol/6lowpan/selective-recovery-lifecycle.md",
+      "tests/protocol/6lowpan/selective-recovery-no-udp.md",
+      "tests/protocol/6lowpan/selective-recovery.md"
+    ],
+    "plan_files": [
+      "plan/pending/6lowpan-completion.md"
+    ],
+    "publication_commits": [
+      "C40"
+    ],
+    "excluded": false,
+    "disposition": "Port delta with its original test/document/registration obligations."
+  },
+  {
+    "sha": "d571d3553054cb5596b1165c1245c1ea7725bea0",
+    "subject": "lowpan: fix: honor IPv6 MTU before virtual forwarding",
+    "paths": [
+      "doc/project/evidence/model/6lowpan/completion.md",
+      "doc/project/evidence/model/6lowpan/p14-mtu-verification.json",
+      "doc/whatsnew/compatible/lowpan-forwarding-mtu.txt",
+      "plan/pending/6lowpan-completion.md",
+      "src/inet/linklayer/lowpan/LowpanFragmentForwarding.cc",
+      "src/inet/linklayer/lowpan/LowpanFragmentForwarding.h",
+      "tests/protocol/6lowpan/LowpanFragmentForwardingMtu.test",
+      "tests/protocol/6lowpan/fragment-forwarding-mtu.md"
+    ],
+    "test_files": [
+      "tests/protocol/6lowpan/LowpanFragmentForwardingMtu.test"
+    ],
+    "reviewer_documents": [
+      "tests/protocol/6lowpan/fragment-forwarding-mtu.md"
+    ],
+    "plan_files": [
+      "plan/pending/6lowpan-completion.md"
+    ],
+    "publication_commits": [
+      "C39"
+    ],
+    "excluded": false,
+    "disposition": "Port delta with its original test/document/registration obligations."
+  },
+  {
+    "sha": "f32ebb4a54efb37b062ba5f74fbea9b0e340da56",
+    "subject": "lowpan: name: align internal constant names",
+    "paths": [
+      "src/inet/linklayer/lowpan/LowpanIpv6.cc",
+      "src/inet/linklayer/lowpan/LowpanNhcCodec.cc"
+    ],
+    "test_files": [],
+    "reviewer_documents": [],
+    "plan_files": [],
+    "publication_commits": [
+      "C12",
+      "C21"
+    ],
+    "excluded": false,
+    "disposition": "C12 owns NHC-file3tokens; C21 owns IPv6-file3tokens."
+  },
+  {
+    "sha": "4d4f21159069ab0d1b18db0f1e34c0affe5faa61",
+    "subject": "doc: change: close 6LoWPAN completion evidence",
+    "paths": [
+      "doc/project/evidence/model/6lowpan/completion.md",
+      "doc/project/evidence/model/6lowpan/coverage.md",
+      "doc/project/evidence/model/6lowpan/encoding-profile.md",
+      "doc/project/evidence/model/6lowpan/final-verification.json",
+      "doc/project/evidence/model/6lowpan/link-contract.md",
+      "doc/project/evidence/model/6lowpan/provenance.md",
+      "doc/project/evidence/model/6lowpan/release-validation.md",
+      "doc/src/users-guide/ch-802154.rst",
+      "doc/whatsnew/compatible/lowpan-extended-registration.txt",
+      "doc/whatsnew/compatible/lowpan-neighbor-registration.txt",
+      "plan/pending/6lowpan-completion.md"
+    ],
+    "test_files": [],
+    "reviewer_documents": [],
+    "plan_files": [
+      "plan/pending/6lowpan-completion.md"
+    ],
+    "publication_commits": [
+      "C41"
+    ],
+    "excluded": false,
+    "disposition": "Final acceptance/documentation source, requiring new-series results."
+  },
+  {
+    "sha": "ed57a1e18202548e4b65c4717e2c02b7e83ddc18",
+    "subject": "plan: location: archive completed 6LoWPAN plan",
+    "paths": [
+      "plan/done/6lowpan-completion.md",
+      "plan/pending/6lowpan-completion.md"
+    ],
+    "test_files": [],
+    "reviewer_documents": [],
+    "plan_files": [
+      "plan/done/6lowpan-completion.md",
+      "plan/pending/6lowpan-completion.md"
+    ],
+    "publication_commits": [
+      "C41"
+    ],
+    "excluded": false,
+    "disposition": "Retain original archived snapshot; C42 archives a different, new publication plan."
+  },
+  {
+    "sha": "9908c007bdb1eda9d74f6ca1f99fe1cae33fbc61",
+    "subject": "doc: change: point 6LoWPAN evidence to the archived plan",
+    "paths": [
+      "doc/project/evidence/model/6lowpan/completion.md",
+      "doc/project/evidence/model/6lowpan/nd-wire.md",
+      "plan/done/6lowpan-implementation-plan.md",
+      "tests/protocol/6lowpan/authority-validity.md",
+      "tests/protocol/6lowpan/border-router-registration.md",
+      "tests/protocol/6lowpan/context-advertisements.md",
+      "tests/protocol/6lowpan/discovery-compression.md",
+      "tests/protocol/6lowpan/extended-host-registration.md",
+      "tests/protocol/6lowpan/extended-registration.md",
+      "tests/protocol/6lowpan/extension-nhc.md",
+      "tests/protocol/6lowpan/host-registration.md",
+      "tests/protocol/6lowpan/host-retry-timing.md",
+      "tests/protocol/6lowpan/mesh-forwarding.md",
+      "tests/protocol/6lowpan/multihop-registration.md",
+      "tests/protocol/6lowpan/nd-option-values.md",
+      "tests/protocol/6lowpan/nd-wire-validation.md",
+      "tests/protocol/6lowpan/neighbor-registration.md",
+      "tests/protocol/6lowpan/paging-dispatch.md",
+      "tests/protocol/6lowpan/registrar-validity.md",
+      "tests/protocol/6lowpan/registration-authority.md",
+      "tests/protocol/6lowpan/router-discovery.md",
+      "tests/protocol/6lowpan/selective-recovery.md",
+      "tests/protocol/6lowpan/stateful-contexts.md"
+    ],
+    "test_files": [],
+    "reviewer_documents": [
+      "tests/protocol/6lowpan/authority-validity.md",
+      "tests/protocol/6lowpan/border-router-registration.md",
+      "tests/protocol/6lowpan/context-advertisements.md",
+      "tests/protocol/6lowpan/discovery-compression.md",
+      "tests/protocol/6lowpan/extended-host-registration.md",
+      "tests/protocol/6lowpan/extended-registration.md",
+      "tests/protocol/6lowpan/extension-nhc.md",
+      "tests/protocol/6lowpan/host-registration.md",
+      "tests/protocol/6lowpan/host-retry-timing.md",
+      "tests/protocol/6lowpan/mesh-forwarding.md",
+      "tests/protocol/6lowpan/multihop-registration.md",
+      "tests/protocol/6lowpan/nd-option-values.md",
+      "tests/protocol/6lowpan/nd-wire-validation.md",
+      "tests/protocol/6lowpan/neighbor-registration.md",
+      "tests/protocol/6lowpan/paging-dispatch.md",
+      "tests/protocol/6lowpan/registrar-validity.md",
+      "tests/protocol/6lowpan/registration-authority.md",
+      "tests/protocol/6lowpan/router-discovery.md",
+      "tests/protocol/6lowpan/selective-recovery.md",
+      "tests/protocol/6lowpan/stateful-contexts.md"
+    ],
+    "plan_files": [
+      "plan/done/6lowpan-implementation-plan.md"
+    ],
+    "publication_commits": [
+      "C41"
+    ],
+    "excluded": false,
+    "disposition": "Retain original archived-plan links; C43 separately links the new publication plan."
+  }
+]

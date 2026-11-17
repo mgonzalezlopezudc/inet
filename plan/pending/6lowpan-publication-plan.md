@@ -1,6 +1,6 @@
 # Publish the completed 6LoWPAN implementation as a review series
 
-> **Kind:** design · **Status:** draft · **Seal:** none · **Owns:** — · **Stands on:** [first-release plan](https://github.com/mgonzalezlopezudc/inet/blob/9908c007bdb1eda9d74f6ca1f99fe1cae33fbc61/plan/done/6lowpan-implementation-plan.md), [completion plan](https://github.com/mgonzalezlopezudc/inet/blob/9908c007bdb1eda9d74f6ca1f99fe1cae33fbc61/plan/done/6lowpan-completion.md), [series rules](../../doc/project/rule/pull-request.md#pr-series-plan), [test rules](../../doc/project/rule/testing.md#tr-plan-protocol)
+> **Kind:** design · **Status:** current · **Seal:** none · **Owns:** — · **Stands on:** [first-release plan](https://github.com/mgonzalezlopezudc/inet/blob/9908c007bdb1eda9d74f6ca1f99fe1cae33fbc61/plan/done/6lowpan-implementation-plan.md), [completion plan](https://github.com/mgonzalezlopezudc/inet/blob/9908c007bdb1eda9d74f6ca1f99fe1cae33fbc61/plan/done/6lowpan-completion.md), [series rules](../../doc/project/rule/pull-request.md#pr-series-plan), [test rules](../../doc/project/rule/testing.md#tr-plan-protocol)
 
 ## Purpose and current authorization
 
@@ -439,13 +439,19 @@ Planning acceptance:
 
 Planning validation on 2026-11-16 found all 17 PR owners, 44 ordered C identifiers and 95 original dispositions consistent. Independent native-split and ND dependency inventories support the narrowed native-representation boundary and the specified reorders; independent plan review resolved the companion filename, unsafe enum intermediate and commit-anchor issues. Local link checks pass. Remote availability of immutable source URLs and every reconstructed-prefix build/runtime result remain unverified. The eleven pre-existing edited files, input HEAD and empty index are unchanged; the only checkout addition from this task is this plan.
 
-Future execution (all NOT_RUN):
+Execution closure at C41:
 
-- [ ] Reconstruct the isolated PR01–PR17 stack and record actual new commit IDs.
-- [ ] Implement the two proposed generic protocol fixtures/documents with C02/C03.
-- [ ] Verify each exact PR tip, compatible parent comparisons and feature/profile state restoration.
-- [ ] Prove final selected-source/fixture projection and preserved user edits.
-- [ ] Execute/record C41 acceptance, then perform the separate C42 archive and C43 link commits.
+- [x] Reconstruct C00–C40 within the 17 approved review boundaries and record actual new model-cut IDs.
+- [x] Implement and execute the two generic protocol fixtures/documents with C02/C03.
+- [x] Verify each review unit's executable inputs, labelled parent comparisons and required feature/profile restoration under the approved execution revision.
+- [x] Prove final selected-source/fixture projection and preserved user edits.
+- [x] Execute and record C41 acceptance; prepare the separately specified C42 archive and C43 incoming-link operations.
+
+The [publication manifest](../../doc/project/evidence/model/6lowpan/publication/manifest.json) identifies the actual tested revisions and executable-equivalent review cuts. Final acceptance passes 22 debug unit fixtures, 69 module fixtures/110 runs (93 normal and 17 declared error runs), and 35 protocol fixtures/287 runs including the two generic IPv6 cases. Targeted release covers 18 protocol fixtures plus the completion module, with 393 matching unconditional rows. Assertions remain debug-only. Required closures, eight compatible advanced UDP-disabled protocol fixtures and the feature-off five modules/three simulations/nine stored comparisons pass. Baseline bytes remain unchanged.
+
+The selected final source tree is `aa561a5b563038201777b313a982ae971d35b7a5`, exactly the corrected oracle. Independent reconstruction checks and the checkpointed metadata repair preserve all 41 executable cuts. The original direct-example launcher attempt is explicitly superseded by exact-C06 and final local-launcher/closure runs. Global architecture/naming/interface findings are inherited from the pinned base; canonical C++ analysis exits 1 with the same 3796 diagnostics, no new signatures, no compiler errors and no source/feature drift.
+
+C42/C43 remain separate mechanical history operations after this accepted model/evidence state. Their actual archive/link certificates and final commit IDs are recorded after those commits exist, without inventing a self-referential commit hash inside a commit. Publishing review branches or remote PRs remains outside this local reconstruction scope.
 
 ## Original commit dispositions
 

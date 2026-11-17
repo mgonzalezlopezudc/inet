@@ -12054,5 +12054,18 @@
       },
       "supersedes": "Original C06 direct leaf-runtime calls only; original bare U/M/P proof remains valid"
     }
+  },
+  "final_review_tip": "104426698510e6eebbfddc7af9105a04ca0a2c4b",
+  "metadata_repair": {
+    "publication_commit": "C07",
+    "old": "55362acffd5c83e57f531616b224c7aa88f6ffb6",
+    "new": "104426698510e6eebbfddc7af9105a04ca0a2c4b",
+    "metadata_paths": [
+      "doc/project/evidence/model/6lowpan/publication/pr03-verification.json"
+    ],
+    "message_changed": false,
+    "src_executable_tests_features_identical": true,
+    "test_metadata_only_paths": [],
+    "original_execution_record": "/home/miguel/workspace/inet-6lowpan-publication/doc/project/evidence/model/6lowpan/publication/pr03-verification.json"
   }
 }

@@ -1,0 +1,13 @@
+# Independent metadata-repair recheck: revision 2
+
+Reviewed 2026-11-17. **PASS — no unresolved finding in this bounded recheck.**
+
+Candidate `4bdab5a8464ad7c4c394710e381fe2dd4bc8b10b`; old tested tip `9144bd04edf3e4e18b1171bfea1ae4d2fd11a509`. Inputs: `metadata-history-repair-02/record.json` and the first-candidate review. Source, index, refs, builds and tests remained read-only; this report and `metadata-repair-review-02-proof.json` are the only reviewer outputs.
+
+The earlier blocker is resolved. **All 34 mapped C07–C40 cuts** retain the corrected PR03 JSON, with identical blob `010c9f6ba2629c6d97d2649532f8e72ee6a4b0f7`. Each includes the invalid-original-leaf-runtime classification, the superseded original closure status and the corrected exact-C06 PASS record. That record identifies revision `1758fe1ddfa145df918e26358e7bbd30619cecea`, its matching source tree, the absolute local launcher and explicit matching `INET_ROOT`; it is not silently relabelled as execution of a new metadata-only commit.
+
+Independently checked all **41 C00–C40 old/new pairs**: source trees and `.oppfeatures` are identical; executable test, NED/MSG and INI/XML example inputs have no difference. The new final `src` tree equals the frozen corrected oracle `1853c49ba0c29edeb2cfed5378c01305beb519ba`. The series still has 41 linear commits on the same pinned base, with no added merge. The checkpoint retains the old tested tip, and active HEAD was still that old tip while this review ran.
+
+Compared revision2 with the corresponding revision1 candidate at every cut. **The only tree differences are the intended PR03 JSON propagation**, and there are no additional commit-message changes. Thus the previously checked historical peer reference, C11 guide replacements, C19 attribution, C29 overview, C39/C40 message corrections and reviewer-header repairs are preserved without another metadata regression. The prior 66 Markdown cut/document link/anchor/header checks remain applicable because those Markdown blobs are unchanged.
+
+This recheck proves metadata propagation and executable identity. It does not add a runtime PASS or declare the separately running final campaign complete. Prior valid execution may be reused through the explicit old/new identity map; original wrong-checkout examples remain historical and superseded. No source/test correction, baseline update, ledger change, sealing decision or additional model run is needed for this metadata revision.
