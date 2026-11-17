@@ -40,7 +40,7 @@ class INET_API LowpanHostRegistration
         bool active = false;
         int attempts = 0;
         simtime_t next = SIMTIME_MAX;
-        simtime_t lastSent = SimTime(-10);
+        simtime_t lastSent = SimTime::fromRaw(-1); // negative means no RS has been sent
         simtime_t blockedUntil;
     };
     LowpanIpv6NeighbourDiscovery& owner;
@@ -51,7 +51,7 @@ class INET_API LowpanHostRegistration
     int maxRouters = 0;
     int maxAddresses = 0;
     int registrationLifetime = 0; // minutes, as carried by ARO
-    simtime_t retryInterval;
+    double retryIntervalSeconds = 0;
     double refreshFraction = 0;
     bool updatingPrefixes = false;
     void scheduleTimer();
@@ -64,6 +64,7 @@ class INET_API LowpanHostRegistration
             NetworkInterface *interface, LowpanNativeLinkDomain *domain);
     void startNextRegistration(const RouterKey& key);
     void sendRegistration(const RouterKey& key, const Ipv6Address& address, int lifetime);
+    simtime_t registrationRetryDeadline(NetworkInterface *interface, bool finalAttempt) const;
     void removeRouter(const RouterKey& key, bool rediscover);
     void removeRouterRoute(const RouterKey& key);
     void rejectAddress(const AddressKey& key);

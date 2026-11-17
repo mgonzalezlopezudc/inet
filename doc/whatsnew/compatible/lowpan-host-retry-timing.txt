@@ -1,0 +1,3 @@
+Advertised native registration retry timing
+
+Native 6LoWPAN hosts now honor nonzero RA Retrans Timer values while retaining their configured retry floor. Three registration requests allow twice the effective interval after the last request, and host retry/discovery deadlines saturate safely at the simulation clock horizon.
