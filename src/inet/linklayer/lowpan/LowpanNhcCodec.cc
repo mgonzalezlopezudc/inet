@@ -6,7 +6,7 @@
 
 namespace inet { namespace lowpan {
 namespace {
-const int protocols[] = {0, 43, 44, 60, 135};
+const int EXTENSION_PROTOCOLS[] = {0, 43, 44, 60, 135};
 constexpr int MAX_DEPTH = 16;
 
 struct Chain {
@@ -94,7 +94,7 @@ class Codec
             return {join(marker, inner.header), inner.original, 1 + inner.encoded, protocol};
         }
         int eid = 0;
-        while (eid < 5 && protocols[eid] != protocol)
+        while (eid < 5 && EXTENSION_PROTOCOLS[eid] != protocol)
             eid++;
         if (eid == 5 || remaining < 8)
             return {};
@@ -213,7 +213,7 @@ class Codec
         auto expanded = makeShared<BytesChunk>(restored);
         expanded->markImmutable();
         return {join(expanded, child.header), size + child.original,
-            encoded + child.encoded, protocols[eid]};
+            encoded + child.encoded, EXTENSION_PROTOCOLS[eid]};
     }
 };
 }
