@@ -4,6 +4,7 @@
 
 #include "inet/networklayer/icmpv6/Ipv6NeighbourDiscovery.h"
 #include "inet/linklayer/lowpan/LowpanNativeLinkDomain.h"
+#include <tuple>
 
 namespace inet { namespace lowpan {
 
@@ -23,6 +24,10 @@ class INET_API LowpanIpv6NeighbourDiscovery : public Ipv6NeighbourDiscovery
     bool registrationRouter = false;
     int maxRegistrations = 0;
     cMessage *registrationExpiryTimer = nullptr;
+    using RouterAdvertisementKey = std::tuple<int, Ipv6Address, Ieee802154Address>;
+    std::map<RouterAdvertisementKey, simtime_t> pendingRouterAdvertisements;
+    cMessage *routerAdvertisementTimer = nullptr;
+    int maxPendingRouterAdvertisements = 0;
     static simsignal_t registrationCountChangedSignal;
     virtual void initialize(int stage) override;
     virtual void handleMessageWhenUp(cMessage *message) override;
@@ -39,6 +44,14 @@ class INET_API LowpanIpv6NeighbourDiscovery : public Ipv6NeighbourDiscovery
     int applyRegistration(const RegistrationKey& key, const Registration& requested);
     void sendRegistrationAdvertisement(const RegistrationKey& key, const Registration& requested,
             const Ipv6NdOption& aro, int status, const Ipv6Address& routerAddress);
+    bool readNativeSource(const Packet *packet, const Ipv6NdOptions& options, LowpanNativeLinkDomain *domain,
+            Ieee802154Address& address) const;
+    Ipv6NdOption *createNativeLinkOption(const Ieee802154Address& address) const;
+    void processNativeRouterSolicitation(Packet *packet, const Ipv6RouterSolicitation *message,
+            NetworkInterface *interface, LowpanNativeLinkDomain *domain);
+    void sendNativeRouterAdvertisement(const RouterAdvertisementKey& key);
+    void scheduleRouterAdvertisements();
+    void clearRouterAdvertisements();
     void removeRegistration(const RegistrationKey& key, bool notify = true);
     void clearRegistrations(bool notify);
     void expireRegistrations();
