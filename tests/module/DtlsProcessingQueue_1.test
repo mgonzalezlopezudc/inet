@@ -38,6 +38,9 @@ class ProcessingQueueFixture : public cSimpleModule
         bool synchronous = false;
         DTLS_TEST_CHECK(output->enqueue(1, 0, SIMTIME_ZERO, [&] { synchronous = true; }));
         DTLS_TEST_CHECK(synchronous && output->getOccupiedBytes() == 0);
+        bool skipped = false, started = false;
+        DTLS_TEST_CHECK(output->enqueue(1, 1, 1, [] { throw cRuntimeError("ineligible operation ran"); }, [] { return false; }, [&] { skipped = true; }, [&] { started = true; }));
+        DTLS_TEST_CHECK(skipped && !started && output->getOccupiedBytes() == 0);
         DTLS_TEST_CHECK(input->enqueue(1, 2, 2, [&] { DTLS_TEST_CHECK(simTime() == 2); ++completed; }));
         DTLS_TEST_CHECK(input->enqueue(2, 1, 1, [&] { throw cRuntimeError("cancelled operation ran"); }));
         DTLS_TEST_CHECK(!input->enqueue(3, 1, 1, [] {}));

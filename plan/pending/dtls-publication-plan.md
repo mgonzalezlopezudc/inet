@@ -6,11 +6,11 @@
 
 Prepare the complete implementation, including the original model and all extensions, as independently reviewable commits and PRs. This uses the 6LoWPAN publication procedure, including its 2026-11-17 faster verification revision: focused debug checks per code commit, combined checks at each PR tip, one final acceptance campaign, an immutable input, a coverage ledger and explicit evidence reuse.
 
-The user approved this concrete 18-PR, 41-commit plan with “proceed” on 2026-11-17. Execution covers isolated target preparation, reconstruction and verification within C00–C40, retaining the original branches and local edits. The user has also requested PR-series creation; delivery follows the explicit incremental upstream policy below, without closing or replacing #1459/#1465 automatically. No new baseline or production behavior is authorized. The cleanup skill's group/commit approval prerequisite is satisfied; it is independent of the draft project planning rules.
+The user approved execution with “proceed” and explicitly approved the helper splits on 2026-11-17. The approved series has 18 PRs and 53 commits: C00–C40 plus the twelve preparations listed below. Execution covers isolated target preparation, reconstruction and verification, retaining the original branches and local edits. Delivery follows the explicit incremental upstream policy below, without closing or replacing #1459/#1465 automatically. No new baseline or production behavior is authorized. The cleanup skill's group/commit approval prerequisite is satisfied; it is independent of the draft project planning rules.
 
 The model uses retained modeled content, overhead and processing costs. Publication must preserve its documented exclusions: real cryptographic security, unrestricted wire interoperability and unrestricted standards conformance are not established.
 
-Approved ownership correction, 2026-11-17: the two decode sites repaired by `448ef4ffa7` are introduced by KeyUpdate, so their source fixes, four fixtures and reviewer document belong together at C16. The association's reassembly query first exists with recovery, so its final visibility belongs at C13. The user explicitly approved this corrective-delta ownership revision. The same 41 commits, 18 PRs, order and final source tree remain in force.
+Approved ownership correction, 2026-11-17: the two decode sites repaired by `448ef4ffa7` are introduced by KeyUpdate, so their source fixes, four fixtures and reviewer document belong together at C16. The association's reassembly query first exists with recovery, so its final visibility belongs at C13. This correction remains in force alongside the subsequently approved helper preparations. The 18 PR purposes, landing order and final source tree are unchanged.
 
 ## Pinned inputs
 
@@ -99,6 +99,27 @@ The table is the landing order and the local linear stack. Every commit addition
 | 18 | examples-and-acceptance | Scenario actions, extended examples and publication acceptance | C37–C40 | All preceding PRs |
 
 ## Proposed commits
+
+### Approved helper preparations
+
+Each suffixed preparation precedes its unsuffixed consumer. C00–C12 retain their already verified trees. The twelve additions below were explicitly approved before implementation; they change the review boundaries while retaining the same final implementation, tests, examples and baseline values. Donor paths and direct fixtures are assigned in the approved allocation ledger. Existing shared-owner tests remain controls when their source changes without a new fixture delta. A new preparation receives its focused debug build/tests and belongs to the same PR as its listed consumer.
+
+| ID | Before | Subject and responsibility | Direct verification |
+| --- | --- | --- | --- |
+| C13a | C13 | `dtls: add: queue eligibility and handoff callbacks` separates the queue mechanism from recovery's first production use. | Module DtlsProcessingQueue_1 and existing establishment controls. |
+| C14a | C14 | `dtls: fix: validate retained plaintext bounds and padding` separates protection-helper correctness from application-data integration. | Unit DtlsRecordSerializer_1 and recovery controls. |
+| C21a | C21 | `tls: refactor: represent the selected authentication mode explicitly` replaces the selection boolean and adapts existing callers without enabling tickets. | Unit TlsHandshakeParameters_1 and unchanged handshake controls. |
+| C21b | C21 | `tls: add: NewSessionTicket content serialization` adds only the shared content and codec. | Unit TlsNewSessionTicket_1. |
+| C21c | C21 | `dtls: add: bounded session ticket storage` adds bounded cache/expiry/selection before endpoint resumption. | Unit DtlsSessionStore_1. |
+| C21d | C21 | `dtls: add: discard one retained handshake message` adds selective resource release before ticket recovery uses it. | Unit DtlsHandshakeReassembly_1. |
+| C22a | C22 | `dtls: add: consume ticket early-data eligibility once` adds attempt-bound replay admission before early-data endpoints. | Unit DtlsSessionStore_1. |
+| C24a | C24 | `dtls: add: filter cached sessions by allowed hashes` adds cache compatibility before algorithm-profile consumers. | Unit DtlsSessionStore_1. |
+| C34a | C34 | `dtls: add: bounded empty-message reassembly and prefix access` prepares legacy handshake assembly. | Unit DtlsHandshakeReassembly_1. |
+| C35a | C35 | `dtls: add: DTLS 1.2 session ticket representation` adds the legacy ticket content/codec. | Unit Dtls12HandshakeSerializer_1. |
+| C35b | C35 | `dtls: add: version-bound session ID storage` prepares legacy lookup/removal while retaining 1.3-only early admission. | Unit Dtls12SessionStore_1 and existing store controls. |
+| C36a | C36 | `dtls: add: DTLS 1.2 CID record representation` adds CID wire/dissection/protection before legacy path consumers. | Dtls12CidSerializer_1 and Dtls12CidProtection_1 in their source categories. |
+
+The PR table's C ranges include these preparations immediately before their consumers. PR03 gains C13a, PR04 C14a, PR07 C21a–C21d, PR08 C22a, PR09 C24a, PR15 C34a, PR16 C35a–C35b and PR17 C36a. The 18 purposes and landing order remain unchanged. The unsuffixed entries below describe the remaining production integration after these helper slices have landed, rather than duplicating the helper work.
 
 All entries are proposals. A donor means its delta at that revision, not the whole final version of a shared file. U, M and P denote `tests/unit`, `tests/module` and `tests/protocol/dtls` fixtures. Exact donor-owned test selections are generated in `commit-plan.json`; the allocation rules below specify splits and later corrections. Reviewer documents accompany their corresponding production behavior. No test is postponed to the final documentation commit.
 
