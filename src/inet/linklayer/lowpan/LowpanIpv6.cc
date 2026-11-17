@@ -16,9 +16,9 @@ Define_Module(LowpanIpv6);
 
 void LowpanIpv6::handleReceivedIcmp(Packet *packet)
 {
-    constexpr int flags = Chunk::PF_ALLOW_INCORRECT | Chunk::PF_ALLOW_INCOMPLETE;
+    constexpr int PEEK_FLAGS = Chunk::PF_ALLOW_INCORRECT | Chunk::PF_ALLOW_INCOMPLETE;
     if (packet->getDataLength() >= B(1)) {
-        auto type = packet->peekDataAt<BytesChunk>(b(0), B(1), flags)->getBytes()[0];
+        auto type = packet->peekDataAt<BytesChunk>(b(0), B(1), PEEK_FLAGS)->getBytes()[0];
         int minimumLength = 0;
         switch (type) {
             case ICMPv6_ROUTER_SOL: minimumLength = 8; break;
@@ -32,7 +32,7 @@ void LowpanIpv6::handleReceivedIcmp(Packet *packet)
         if (minimumLength != 0) {
             bool malformed = packet->getDataLength() < B(minimumLength);
             if (!malformed) {
-                auto header = packet->peekAtFront<Icmpv6Header>(b(-1), flags);
+                auto header = packet->peekAtFront<Icmpv6Header>(b(-1), PEEK_FLAGS);
                 malformed = header->isIncorrect() || header->isIncomplete();
             }
             if (malformed) {
