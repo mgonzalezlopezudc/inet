@@ -1,0 +1,3 @@
+Ordinary native Neighbor Solicitation replies
+
+Native 6LoWPAN Neighbor Discovery routers now answer ordinary Neighbor Solicitations without ARO, including unicast probes without SLLAO. Responses use the validated native receive identity without creating address registrations. Multicast solicitations receive advertisements carrying the native TLLAO. Valid DAD solicitations receive an all-nodes native broadcast advertisement.

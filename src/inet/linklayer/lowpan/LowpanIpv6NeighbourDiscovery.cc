@@ -450,6 +450,68 @@ void LowpanIpv6NeighbourDiscovery::createRaTimer(NetworkInterface *ie)
         Ipv6NeighbourDiscovery::createRaTimer(ie);
 }
 
+void LowpanIpv6NeighbourDiscovery::processNativeNeighbourSolicitation(Packet *packet,
+        const Ipv6NeighbourSolicitation *message, NetworkInterface *interface, LowpanNativeLinkDomain *domain)
+{
+    auto addresses = packet->findTag<L3AddressInd>();
+    auto hop = packet->findTag<HopLimitInd>();
+    auto native = packet->findTag<Ieee802154AddressInd>();
+    auto data = interface->getProtocolData<Ipv6InterfaceData>();
+    auto target = message->getTargetAddress();
+    bool valid = !message->isIncorrect() && !message->isIncomplete() && message->getCode() == 0 &&
+        message->getChunkLength() == packet->getDataLength() && addresses &&
+        addresses->getSrcAddress().getType() == L3Address::IPv6 &&
+        addresses->getDestAddress().getType() == L3Address::IPv6 && hop && hop->getHopLimit() == 255 &&
+        (addresses->getSrcAddress().toIpv6().isUnicast() || addresses->getSrcAddress().toIpv6().isUnspecified()) &&
+        target.isUnicast() && !target.isUnspecified() && data->hasValidAddress(target, simTime()) &&
+        !data->isTentativeAddress(target) && native && domain->contains(native->getSrcAddress()) &&
+        native->getSrcPanId() == domain->getPanId() && native->getDestPanId() == domain->getPanId() &&
+        Icmpv6::verifyChecksum(packet);
+    int sourceOptions = 0;
+    for (size_t i = 0; i < message->getOptions().getOptionArraySize(); i++) {
+        auto option = message->getOptions().getOption(i);
+        valid &= option->getOptionLength() != 0 && int(option->getType()) != 33;
+        sourceOptions += option->getType() == IPv6ND_SOURCE_LINK_LAYER_ADDR_OPTION;
+    }
+    Ieee802154Address source;
+    if (sourceOptions != 0)
+        valid &= readNativeSource(packet, message->getOptions(), domain, source);
+    bool dad = addresses && addresses->getSrcAddress().getType() == L3Address::IPv6 &&
+        addresses->getSrcAddress().toIpv6().isUnspecified();
+    if (dad)
+        valid &= sourceOptions == 0 && addresses->getDestAddress().toIpv6() == target.formSolicitedNodeMulticastAddress();
+    if (!valid) {
+        LowpanPacketDropDetails details;
+        details.setReason(OTHER_PACKET_DROP);
+        details.setLowpanReason(LOWPAN_MALFORMED);
+        emit(packetDroppedSignal, packet, &details);
+        delete packet;
+        return;
+    }
+    bool multicast = addresses->getDestAddress().toIpv6().isMulticast();
+    auto reply = makeShared<Ipv6NeighbourAdvertisement>();
+    reply->setTargetAddress(target);
+    reply->setRouterFlag(registrationRouter);
+    reply->setSolicitedFlag(!dad);
+    reply->setOverrideFlag(multicast);
+    if (multicast) {
+        auto option = createNativeLinkOption(domain->getPeer(interface).address);
+        option->setType(IPv6ND_TARGET_LINK_LAYER_ADDR_OPTION);
+        reply->getOptionsForUpdate().appendOption(option);
+        reply->addChunkLength(B(16));
+    }
+    auto output = new Packet("native-neighbour-advertisement");
+    Icmpv6::insertChecksum(CHECKSUM_COMPUTED, reply, output);
+    output->insertAtFront(reply);
+    auto request = output->addTag<Ieee802154AddressReq>();
+    request->setSrcAddress(domain->getPeer(interface).address);
+    request->setDestAddress(dad ? Ieee802154Address("ffff") : native->getSrcAddress());
+    request->setSrcPanId(domain->getPanId());
+    request->setDestPanId(domain->getPanId());
+    sendPacketToIpv6Module(output, dad ? Ipv6Address::ALL_NODES_2 : addresses->getSrcAddress().toIpv6(), target, interface->getInterfaceId());
+    delete packet;
+}
+
 void LowpanIpv6NeighbourDiscovery::processNDMessage(Packet *packet, const Icmpv6Header *message)
 {
     auto indication = packet->findTag<InterfaceInd>();
@@ -461,7 +523,13 @@ void LowpanIpv6NeighbourDiscovery::processNDMessage(Packet *packet, const Icmpv6
             return;
         }
         if (auto solicitation = dynamic_cast<const Ipv6NeighbourSolicitation *>(message)) {
-            processRegistration(packet, solicitation, interface, boundary->getLinkDomain());
+            bool registration = false;
+            for (size_t i = 0; i < solicitation->getOptions().getOptionArraySize(); i++)
+                registration |= int(solicitation->getOptions().getOption(i)->getType()) == 33;
+            if (registration)
+                processRegistration(packet, solicitation, interface, boundary->getLinkDomain());
+            else
+                processNativeNeighbourSolicitation(packet, solicitation, interface, boundary->getLinkDomain());
             return;
         }
     }

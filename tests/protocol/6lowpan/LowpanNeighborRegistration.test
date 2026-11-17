@@ -5,6 +5,7 @@ registrations and removes state on zero lifetime, exact expiry and lifecycle.
 
 %file: RegistrationCheck.cc
 #include "inet/common/InitStages.h"
+#include "inet/common/MemoryOutputStream.h"
 #include "inet/common/ProtocolTag_m.h"
 #include "inet/common/checksum/Checksum.h"
 #include "inet/common/packet/Packet.h"
@@ -27,7 +28,7 @@ class RegistrationCheck : public cSimpleModule, public cListener
     NetworkInterface *interface=nullptr;
     Ipv6RoutingTable *routes=nullptr;
     cModule *nd=nullptr;
-    int injected=0,advertisements=0,dataPackets=0,drops=0;
+    int injected=0,advertisements=0,dataPackets=0,drops=0,ordinaryReplies=0,dadReplies=0;
     Ipv6Address registered(int peer) {return Ipv6Address(peer==1?"2001:db8::a":peer==2?"2001:db8::b":"2001:db8::c");}
     Ipv6Address routerAddress() {return Ipv6Address("fe80::211:2233:4455:6603");}
     std::vector<uint8_t> addressBytes(int peer,bool linkLocal=false) {
@@ -58,6 +59,19 @@ class RegistrationCheck : public cSimpleModule, public cListener
     void solicitation(int ms,int peer,int addressPeer,int lifetime,bool badChecksum=false,int sllaoPeer=0,int hop=255,int ownerPeer=0) {
         auto bytes=ns(peer,addressPeer,lifetime,badChecksum,sllaoPeer,false,hop,ownerPeer);bytes.insert(bytes.begin(),0x41);input(SimTime(ms,SIMTIME_MS),peer,bytes);
     }
+    void ordinarySolicitation(int ms,bool multicast,bool dad=false,bool dadSllao=false) {
+        auto bytes=ns(1,1,1);bytes.resize(64);bytes[5]=24;
+        Ipv6Address destination=multicast?routerAddress().formSolicitedNodeMulticastAddress():routerAddress();
+        MemoryOutputStream address;address.writeIpv6Address(destination);std::copy(address.getData().begin(),address.getData().end(),bytes.begin()+24);
+        if (dad) std::fill(bytes.begin()+8,bytes.begin()+24,0);
+        if (multicast && (!dad || dadSllao)) { // A multicast NS carries native SLLAO, but never ARO.
+            bytes.insert(bytes.end(),{1,2,0,0x11,0x22,0x33,0x44,0x55,0x66,1,0,0,0,0,0,0});bytes[5]=40;
+        }
+        bytes[42]=bytes[43]=0;std::vector<uint8_t> pseudo(bytes.begin()+8,bytes.begin()+40);
+        pseudo.insert(pseudo.end(),{0,0,0,bytes[5],0,0,0,58});pseudo.insert(pseudo.end(),bytes.begin()+40,bytes.end());
+        auto checksum=internetChecksum(pseudo);bytes[42]=checksum>>8;bytes[43]=checksum;
+        bytes.insert(bytes.begin(),0x41);input(SimTime(ms,SIMTIME_MS),1,bytes);
+    }
     bool hasRoute(int peer) {
         for (int i=0;i<routes->getNumRoutes();i++) {
             auto route=routes->getRoute(i);
@@ -85,6 +99,8 @@ class RegistrationCheck : public cSimpleModule, public cListener
         solicitation(30,1,1,1,false,0,254);solicitation(40,1,1,1,true);solicitation(50,1,1,1,false,2);
         solicitation(60,1,1,1);solicitation(85,1,1,1,false,0,255,2);solicitation(100,1,1,0);solicitation(110,2,2,1);
         solicitation(200,2,4,0); // A distinct configured binding must survive zero-lifetime conflict.
+        ordinarySolicitation(300,false);ordinarySolicitation(320,true);ordinarySolicitation(340,true,true);
+        ordinarySolicitation(360,false,true);ordinarySolicitation(380,true,true,true);
         solicitation(60120,1,1,1);solicitation(60150,1,1,1);solicitation(60180,1,1,1);
         for (size_t i=0;i<checkTimes.size();i++) scheduleAt(SimTime(checkTimes[i],SIMTIME_MS),new cMessage("verify-registration",-1-i));
     }
@@ -134,6 +150,20 @@ class RegistrationCheck : public cSimpleModule, public cListener
         auto header=packet->peekAtFront<Icmpv6Header>();
         if (header->getType()==ICMPv6_ECHO_REQUEST) {ASSERT(ip->getDestAddress()==registered(1));dataPackets++;}
         else {
+            auto ordinary=dynamicPtrCast<const Ipv6NeighbourAdvertisement>(header);
+            if (ordinary && (ordinary->getOptions().getOptionArraySize()==0 || ordinary->getOptions().getOption(0)->getType()==IPv6ND_TARGET_LINK_LAYER_ADDR_OPTION)) {
+                if (ip->getDestAddress()==Ipv6Address::ALL_NODES_2) {
+                    ASSERT(ordinary->getRouterFlag() && !ordinary->getSolicitedFlag() && ordinary->getOverrideFlag() && ip->getHopLimit()==255);
+                    ASSERT(ordinary->getTargetAddress()==routerAddress() && ordinary->getOptions().getOptionArraySize()==1);
+                    auto option=ordinary->getOptions().getOption(0);ASSERT(option->getOptionLength()==2 && option->getPaddingBytesArraySize()==14 && uint8_t(option->getPaddingBytes(7))==3);
+                    ASSERT(packet->getTag<Ieee802154AddressInd>()->getDestAddress().isBroadcast());checkBinding(2,true);ASSERT(!hasRoute(1));dadReplies++;delete packet;return;
+                }
+                ASSERT(ordinaryReplies<2 && ordinary->getRouterFlag() && ordinary->getSolicitedFlag() && ip->getHopLimit()==255);
+                ASSERT(ordinary->getTargetAddress()==routerAddress() && ip->getDestAddress()==registered(1));
+                ASSERT(ordinary->getOverrideFlag()==(ordinaryReplies==1) && ordinary->getOptions().getOptionArraySize()==size_t(ordinaryReplies));
+                if (ordinaryReplies) {auto option=ordinary->getOptions().getOption(0);ASSERT(option->getOptionLength()==2 && option->getPaddingBytesArraySize()==14 && uint8_t(option->getPaddingBytes(7))==3);}
+                checkBinding(2,true);ASSERT(!hasRoute(1));ordinaryReplies++;delete packet;return;
+            }
             const int statuses[]={0,1,2,0,1,0,0,1,0,0,0},peers[]={1,2,2,1,2,1,2,2,1,1,1};
             ASSERT(advertisements<11 && ip->getHopLimit()==255);
             auto advertisement=dynamicPtrCast<const Ipv6NeighbourAdvertisement>(header);ASSERT(advertisement && advertisement->getRouterFlag() && advertisement->getSolicitedFlag());
@@ -150,7 +180,7 @@ class RegistrationCheck : public cSimpleModule, public cListener
     void finish() override {
         std::cout << "injected=" << injected << " advertisements=" << advertisements << " data=" << dataPackets << " drops=" << drops << " counts=";
         for (auto count:counts) std::cout << count << ',';std::cout << '\n';
-        ASSERT(injected==16 && advertisements==11 && dataPackets==1 && drops==4);
+        ASSERT(injected==21 && advertisements==11 && ordinaryReplies==2 && dadReplies==2 && dataPackets==1 && drops==6);
         ASSERT(counts==std::vector<long>({1,0,1,0,1,0,1,0,1}));
         std::cout << "Native ARO server radio replies, learned routes, ownership, expiry and lifecycle verified\n";
     }
