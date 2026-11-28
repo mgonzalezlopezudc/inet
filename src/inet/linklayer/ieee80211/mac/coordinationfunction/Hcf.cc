@@ -1780,8 +1780,8 @@ static simtime_t computeMultipleProtectionResponseAirtimeBound(const Ieee80211Mo
         throw cRuntimeError("multipleProtectionResponseAirtimeBound must be nonnegative");
     if (configuredBound > SIMTIME_ZERO)
         return configuredBound;
-    // A successful response must use a mode the local PHY can decode. A sender's
-    // configured response rate only controls the responses it sends itself.
+    // INET modeling simplification: bound the airtime by the longest response the local PHY can decode.
+    // The sender's configured response rate controls the responses it transmits.
     simtime_t bound;
     for (int i = 0; i < modeSet->getNumModes(); i++)
         bound = std::max(bound, modeSet->getMode(i)->getDuration(responseLength));
