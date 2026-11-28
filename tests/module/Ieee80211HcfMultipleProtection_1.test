@@ -598,7 +598,8 @@ record-scalar-results = false
 **.wlan[*].mac.hcf.edca.edcaf[*].cwMin = 0
 **.wlan[*].mac.hcf.edca.edcaf[*].cwMax = 0
 *.observer.wlan[0].mac.hcf.edca.edcaf[0].aifsn = 10
-**.wlan[*].mac.hcf.edca.edcaf[*].txopProcedure.txopLimit = ${limit=1024,1024,1024,1024,1024,1024,0,0,1024,1024,1024,1024,1024,1024,164,176,176,384,336,335,1024,1024,596,190,210,190,365,380 ! scenario}us
+# Scenario 27 isolates CTS: the fast CTS estimate gives 392 us and the conservative bound gives 408 us.
+**.wlan[*].mac.hcf.edca.edcaf[*].txopProcedure.txopLimit = ${limit=1024,1024,1024,1024,1024,1024,0,0,1024,1024,1024,1024,1024,1024,164,176,176,384,336,335,1024,1024,596,190,210,190,365,400 ! scenario}us
 *.sender.wlan[0].mac.hcf.edca.edcaf[*].txopProcedure.protectionMechanism = ${scenario} == 11 || ${scenario} == 12 ? "single" : "multiple"
 *.sender.wlan[0].address = "02:00:00:00:00:01"
 *.receiver.wlan[0].address = "02:00:00:00:00:02"
